@@ -168,8 +168,13 @@ def get_models_to_merge(input_model_files):
             transport_path=transport_path,
             surface_path=surface_path,
         )
+        model.species, model.reactions = load_chemkin_file(
+            chemkin,
+            species_path,
+            transport_path=transport_path,
+            surface_path=surface_path,
+        )
         models.append(model)
-
     return models
 
 
