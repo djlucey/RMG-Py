@@ -153,10 +153,10 @@ def get_models_to_merge(input_model_files):
     models = []
 
     for entry in input_model_files:
+        if not (3 <= len(entry) <= 4):
+            raise ValueError(f"Each model input must have 3 or 4 elements: {entry}")
         
-        chemkin = entry[0]
-        species_path = entry[1]
-        transport_path = entry[2] if len(entry) >= 3 else None
+        chemkin, species_path, transport_path = entry[:3]
         surface_path = entry[3] if len(entry) == 4 else None
 
         print(f'Loading model #{len(models) + 1}...')

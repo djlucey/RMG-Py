@@ -253,6 +253,23 @@ def adjustment(nodes, change, operation='times'):
                 rmg.plus_adjust[node] += change
     
 
+def adjustment(nodes, change, operation='times'):
+    """this function takes in a list of names of nodes to adjust and adds to a master dictionary"""
+    for node in nodes:
+        if operation == 'times':
+            current_adjustments = rmg.times_adjust.get(node)
+            if current_adjustments is None:
+                rmg.times_adjust[node] = change
+            else:
+                rmg.times_adjust[node] *= change
+        elif operation == 'plus':
+            current_adjustments = rmg.plus_adjust.get(node)
+            if current_adjustments is None:
+                rmg.plus_adjust[node] = change
+            else:
+                rmg.plus_adjust[node] += change
+    
+
 def core_species_file(species_dictionary_file):
     # all species here are assumed to be reactive
     new_species_dict = load_species_dictionary(species_dictionary_file)
