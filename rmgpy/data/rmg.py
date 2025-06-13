@@ -84,7 +84,7 @@ class RMGDatabase(object):
              depository=True,
              solvation=True,
              surface=True,  # on by default, because solvation is also on by default
-             testing=False):
+             testing=False, ):
         """
         Load the RMG database from the given `path` on disk, where `path`
         points to the top-level folder of the RMG database. If none of the

@@ -80,7 +80,9 @@ def database(
         kineticsFamilies='default',
         kineticsDepositories='default',
         kineticsEstimator='rate rules',
-        adsorptionGroups='adsorptionPt111'
+        adsorptionGroups='adsorptionPt111',
+        #plus_adjust = None,
+        #times_adjust=None,
 ):
     # This function just stores the information about the database to be loaded
     # We don't actually load the database until after we're finished reading
@@ -116,6 +118,8 @@ def database(
         rmg.kinetics_families = kineticsFamilies
 
     rmg.adsorption_groups = adsorptionGroups
+    #rmg.plus_adjust = plus_adjust
+    #rmg.times_adjust = times_adjust
 
 def catalyst_properties(bindingEnergies=None,
                         surfaceSiteDensity=None,
@@ -189,6 +193,22 @@ def convert_binding_energies(binding_energies):
             raise
     return new_dict
 
+def adjustment(nodes, change, operation='times'):
+    """this function takes in a list of names of nodes to adjust and adds to a master dictionary"""
+    for node in nodes:
+        if operation == 'times':
+            current_adjustments = rmg.times_adjust.get(node)
+            if current_adjustments is None:
+                rmg.times_adjust[node] = change
+            else:
+                rmg.times_adjust[node] *= change
+        elif operation == 'plus':
+            current_adjustments = rmg.plus_adjust.get(node)
+            if current_adjustments is None:
+                rmg.plus_adjust[node] = change
+            else:
+                rmg.plus_adjust[node] += change
+    
 
 def species(label, structure, reactive=True, cut=False, size_threshold=None):
     logging.debug('Found {0} species "{1}" ({2})'.format('reactive' if reactive else 'nonreactive',
@@ -1544,6 +1564,8 @@ def read_input_file(path, rmg0):
     set_global_rmg(rmg0)
     rmg.reaction_model = CoreEdgeReactionModel()
     rmg.initial_species = []
+    rmg.plus_adjust = {}
+    rmg.times_adjust = {}
     rmg.reaction_systems = []
     species_dict = {}
     mol_to_frag = {}
@@ -1556,6 +1578,7 @@ def read_input_file(path, rmg0):
         'database': database,
         'catalystProperties': catalyst_properties,
         'species': species,
+        'Adjustment': adjustment,
         'forbidden': forbidden,
         'SMARTS': smarts,
         'fragment_adj': fragment_adj,

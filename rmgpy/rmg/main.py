@@ -254,6 +254,8 @@ class RMG(util.Subject):
 
         self.exec_time = []
         self.liquid_volumetric_mass_transfer_coefficient_power_law = None
+        self.plus_adjust = {}
+        self.times_adjust = {}
 
     def load_input(self, path=None):
         """
@@ -495,6 +497,8 @@ class RMG(util.Subject):
                     family.fill_rules_by_averaging_up(verbose=self.verbose_comments)
 
         self.database.thermo.adsorption_groups = self.adsorption_groups
+        self.database.thermo.plus_adjust = self.plus_adjust
+        self.database.thermo.times_adjust = self.times_adjust
 
     def initialize(self, **kwargs):
         """

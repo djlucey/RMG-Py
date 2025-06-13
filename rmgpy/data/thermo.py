@@ -201,7 +201,7 @@ def process_old_library_entry(data):
     )
 
 
-def add_thermo_data(thermo_data1, thermo_data2, group_additivity=False, verbose=False):
+def add_thermo_data(thermo_data1, thermo_data2, group_additivity=False, verbose=False, times = 1, plus = 0):
     """
     Add the thermodynamic data `thermo_data2` to the data `thermo_data1`,
     and return `thermo_data1`.
@@ -215,9 +215,12 @@ def add_thermo_data(thermo_data1, thermo_data2, group_additivity=False, verbose=
         raise ValueError('Cannot add these ThermoData objects due to their having different temperature points.')
 
     for i in range(thermo_data1.Tdata.value_si.shape[0]):
-        thermo_data1.Cpdata.value_si[i] += thermo_data2.Cpdata.value_si[i]
-    thermo_data1.H298.value_si += thermo_data2.H298.value_si
-    thermo_data1.S298.value_si += thermo_data2.S298.value_si
+        thermo_data1.Cpdata.value_si[i] *= times
+        thermo_data1.Cpdata.value_si[i] += (thermo_data2.Cpdata.value_si[i] + plus)
+    thermo_data1.H298.value_si *= times
+    thermo_data1.H298.value_si += (thermo_data2.H298.value_si + plus)
+    thermo_data1.S298.value_si *= times
+    thermo_data1.S298.value_si += (thermo_data2.S298.value_si + plus)
 
     test_zero = sum(abs(value) for value in
                     [thermo_data2.H298.value_si, thermo_data2.S298.value_si] + thermo_data2.Cpdata.value_si.tolist())
@@ -858,6 +861,8 @@ class ThermoDatabase(object):
         self.surface = {}
         self.groups = {}
         self.adsorption_groups = "adsorptionPt111"
+        self.plus_adjust = {}
+        self.times_adjust = {}
         self.library_order = []
         self.local_context = {
             'ThermoData': ThermoData,
@@ -993,7 +998,7 @@ class ThermoDatabase(object):
             'longDistanceInteraction_cyclic',
             'longDistanceInteraction_noncyclic',
             'adsorptionPt111',
-            'adsorptionLi'
+            'adsorptionLi',
         ]
         # categories.append(self.adsorption_groups)
         self.groups = {
@@ -1502,14 +1507,21 @@ class ThermoDatabase(object):
             return thermo
 
         molecule = species.molecule[0]
+
         # only want/need to do one resonance structure
         surface_sites = []
         for atom in molecule.atoms:
             if atom.is_surface_site():
                 surface_sites.append(atom)
         normalized_bonds = {'C': 0., 'O': 0., 'N': 0., 'H': 0., 'F': 0., 'Li': 0.}
+        plus_total = 0
+        times_total = 1
         max_bond_order = {'C': 4., 'O': 2., 'N': 3., 'H': 1., 'F': 1, 'Li': 1.}
         for site in surface_sites:
+            plus, times = self._find_plus_and_times_adjustments(site, molecule)
+            plus_total += plus
+            times_total *= times
+            print(f"plus={plus}, times={times} for {site}")
             numbonds = len(site.bonds)
             if numbonds == 0:
                 # vanDerWaals
@@ -1547,17 +1559,20 @@ class ThermoDatabase(object):
                     continue
                 comments.append(f'{bond:.2f}{element}')
         thermo.H298.value_si += change_in_binding_energy
+        thermo.H298.value_si *= times_total
+        thermo.H298.value_si += plus_total
         thermo.comment += f" Binding energy corrected by LSR ({'+'.join(comments)}) from {metal_to_scale_from} (H={change_in_binding_energy/1e3:+.0f}kJ/mol)"
         
-        surface_sites = molecule.get_surface_sites()
-        try:
-            self._add_adsorption_correction(thermo, self.groups['adsorptionScaling'], molecule, surface_sites)
-        except (KeyError, DatabaseError):
-            logging.error("Couldn't find in adsorptionScaling thermo database:")
-            logging.error(molecule)
-            logging.error(molecule.to_adjacency_list())
-            raise
-        thermo.comment += f"Adsorption correction from adsorptionScaling."
+        #surface_sites = molecule.get_surface_sites()
+        #try:
+            #self._add_adsorption_correction(thermo, self.groups['adsorptionScaling'], molecule, surface_sites)
+            #self._add_adsorption_correction(thermo, self.groups['adsorptionPt111'], molecule, surface_sites)
+        #except (KeyError, DatabaseError):
+            #logging.error("Couldn't find in adsorptionPt111 thermo database:")
+            #logging.error(molecule)
+            #logging.error(molecule.to_adjacency_list())
+            #raise
+        #thermo.comment += f"Adsorption correction from adsorptionPt111."
         return thermo
 
     def get_thermo_data_for_surface_species(self, species):
@@ -1679,6 +1694,42 @@ class ThermoDatabase(object):
 
         return thermo
 
+    def _find_plus_and_times_adjustments(self, atom, molecule):
+        plus_sum = 0
+        times_product = 1
+
+        adsorption_groups = self.groups['adsorptionPt111']
+        labeled_atoms = {'*': atom}
+        node = adsorption_groups.descend_tree(molecule, labeled_atoms) # descends pt111
+        if node is None: 
+            # no match, so try the next surface site
+            print(f'nonenode for {atom}')
+            return plus_sum, times_product
+        while node is not None and node.data is None:
+            node = node.parent
+        if node is None:
+            # no data, so try the next surface site
+            print(f'nonenode for {atom}')
+            return plus_sum, times_product
+        # now we know what node, so we can get the parents 
+        # the label for these will match with keys in 
+        parents = []
+        current = node.parent  # start from the parent
+        while current is not None:
+            parents.append(current.label)
+            current = current.parent
+
+        for nodename in self.plus_adjust:
+            if nodename in parents:
+                plus_sum += self.plus_adjust[nodename]
+
+        for nodename in self.times_adjust:
+            if nodename in parents:
+                times_product *= self.times_adjust[nodename]
+        print(f'plus_sum={plus_sum}, times_product={times_product} for {atom}')
+        print(f'parents={parents}')
+        return plus_sum, times_product
+
     def _add_adsorption_correction(self, adsorption_thermo, adsorption_groups, molecule, surface_sites):
         """Add thermo adsorption correction(s) to estimate adsorbate thermo from gas phase.
         If the molecule is multidentate, multiple adsoption corrections may be applied if 
@@ -1699,7 +1750,7 @@ class ThermoDatabase(object):
         matches = []
         for atom in surface_sites:
             labeled_atoms = {'*': atom}
-            node = adsorption_groups.descend_tree(molecule, labeled_atoms)
+            node = adsorption_groups.descend_tree(molecule, labeled_atoms) # descends pt111
             if node is None: 
                 # no match, so try the next surface site
                 continue
@@ -1708,6 +1759,15 @@ class ThermoDatabase(object):
             if node is None:
                 # no data, so try the next surface site
                 continue
+
+            plus_sum, times_product = self._find_plus_and_times_adjustments(atom, molecule)
+
+            if plus_sum != 0:
+                adsorption_thermo.comment += f' plus ({plus_sum})'
+
+            if times_product != 1:
+                adsorption_thermo.comment += f' times ({times_product})'
+
             data = node.data
             comment = node.label
             loop_count = 0
@@ -1730,11 +1790,11 @@ class ThermoDatabase(object):
             group_surface_sites = node.item.get_surface_sites()
             if len(group_surface_sites) == number_of_surface_sites:
                 # all the surface sites are accounted for so add the adsorption group and return
-                add_thermo_data(adsorption_thermo, data, group_additivity=True)
+                add_thermo_data(adsorption_thermo, data, group_additivity=True, plus=plus_sum, times=times_product)
                 return True
             else:
                 # we have not found a full match yet, so append and keep looking
-                matches.append((len(group_surface_sites),data))
+                matches.append((len(group_surface_sites),data, plus_sum, times_product))
         
         if len(matches) == 0:
             raise DatabaseError(f"Could not find an adsorption correction in {adsorption_groups.label} for {molecule}")
@@ -1742,16 +1802,18 @@ class ThermoDatabase(object):
         # sort the matches by descending number of surface sites
         corrections_applied = 0
         # start a counter for the number of corrections applied
-        for number_of_group_sites, data in matches:
+        for number_of_group_sites, data, plus_sum, times_product in matches:
             if number_of_surface_sites - number_of_group_sites < 0:
                 # too many sites in this group, skip to the next one
                 continue
             if not corrections_applied:
                 # this is the first correction, so add H298, S298, and Cp
-                add_thermo_data(adsorption_thermo, data, group_additivity=True)
+                add_thermo_data(adsorption_thermo, data, group_additivity=True, plus=plus_sum, times=times_product)
             else:
                 # We have already corrected S298 and Cp, so we only want to correct H298
                 adsorption_thermo.H298.value_si += data.H298.value_si
+                adsorption_thermo.H298.value_si *= times_product
+                adsorption_thermo.H298.value_si += plus_sum
                 adsorption_thermo.comment += ' + H298({0})'.format(data.comment)
             corrections_applied += 1
             number_of_surface_sites -= number_of_group_sites

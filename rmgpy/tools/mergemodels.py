@@ -127,11 +127,25 @@ def get_models_to_merge(input_model_files):
     Reads input file paths and creates a list of ReactionModel
     """
     models = []
-    for chemkin, species_path, transport_path in input_model_files:
-        print('Loading model #{0:d}...'.format(len(models) + 1))
+
+    for entry in input_model_files:
+        if not (3 <= len(entry) <= 4):
+            raise ValueError(f"Each model input must have 3 or 4 elements: {entry}")
+        
+        chemkin, species_path, transport_path = entry[:3]
+        surface_path = entry[3] if len(entry) == 4 else None
+
+        print(f'Loading model #{len(models) + 1}...')
+
         model = ReactionModel()
-        model.species, model.reactions = load_chemkin_file(chemkin, species_path, transport_path=transport_path)
+        model.species, model.reactions = load_chemkin_file(
+            chemkin,
+            species_path,
+            transport_path=transport_path,
+            surface_path=surface_path,
+        )
         models.append(model)
+
     return models
 
 
