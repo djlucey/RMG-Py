@@ -1791,11 +1791,11 @@ class ThermoDatabase(object):
             group_surface_sites = node.item.get_surface_sites()
             if len(group_surface_sites) == number_of_surface_sites:
                 # all the surface sites are accounted for so add the adsorption group and return
-                add_thermo_data(adsorption_thermo, data, group_additivity=True, plus=plus_sum, times=times_product)
+                add_thermo_data(adsorption_thermo, data, group_additivity=True)
                 return True
             else:
                 # we have not found a full match yet, so append and keep looking
-                matches.append((len(group_surface_sites),data, plus_sum, times_product))
+                matches.append((len(group_surface_sites),data))
         
         if len(matches) == 0:
             raise DatabaseError(f"Could not find an adsorption correction in {adsorption_groups.label} for {molecule}")
@@ -1803,18 +1803,16 @@ class ThermoDatabase(object):
         # sort the matches by descending number of surface sites
         corrections_applied = 0
         # start a counter for the number of corrections applied
-        for number_of_group_sites, data, plus_sum, times_product in matches:
+        for number_of_group_sites, data in matches:
             if number_of_surface_sites - number_of_group_sites < 0:
                 # too many sites in this group, skip to the next one
                 continue
             if not corrections_applied:
                 # this is the first correction, so add H298, S298, and Cp
-                add_thermo_data(adsorption_thermo, data, group_additivity=True, plus=plus_sum, times=times_product)
+                add_thermo_data(adsorption_thermo, data, group_additivity=True)
             else:
                 # We have already corrected S298 and Cp, so we only want to correct H298
                 adsorption_thermo.H298.value_si += data.H298.value_si
-                adsorption_thermo.H298.value_si *= times_product
-                adsorption_thermo.H298.value_si += plus_sum
                 adsorption_thermo.comment += ' + H298({0})'.format(data.comment)
             corrections_applied += 1
             number_of_surface_sites -= number_of_group_sites
