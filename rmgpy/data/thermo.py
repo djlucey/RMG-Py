@@ -1520,11 +1520,13 @@ class ThermoDatabase(object):
         normalized_bonds = {'C': 0., 'O': 0., 'N': 0., 'H': 0., 'F': 0., 'Li': 0.}
         plus_total = 0
         times_total = 1
+        matching_parents_master = {}
         max_bond_order = {'C': 4., 'O': 2., 'N': 3., 'H': 1., 'F': 1, 'Li': 1.}
         for site in surface_sites:
-            plus, times = self._find_plus_and_times_adjustments(site, molecule)
+            plus, times, matching_parents = self._find_plus_and_times_adjustments(site, molecule)
             plus_total += plus
             times_total *= times
+            matching_parents_master.update(matching_parents)
             #print(f"plus={plus}, times={times} for {site}")
             numbonds = len(site.bonds)
             if numbonds == 0:
@@ -1568,9 +1570,10 @@ class ThermoDatabase(object):
         thermo.comment += f" Binding energy corrected by LSR ({'+'.join(comments)}) from {metal_to_scale_from} (H={change_in_binding_energy/1e3:+.0f}kJ/mol)"
         if plus_total != 0:
             thermo.comment += f' plus manual adjustment ({plus_total})'
-
         if times_total != 1:
             thermo.comment += f' times manual adjustment ({times_total})'
+        for key in matching_parents_master:
+            thermo.comment += f', matching parent {key}: {matching_parents[key]}'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
@@ -1706,6 +1709,7 @@ class ThermoDatabase(object):
     def _find_plus_and_times_adjustments(self, atom, molecule):
         plus_sum = 0
         times_product = 1
+        matching_parents = {}
 
         adsorption_groups = self.groups['adsorptionPt111']
         labeled_atoms = {'*': atom}
@@ -1713,7 +1717,7 @@ class ThermoDatabase(object):
         if node is None: 
             # no match, so try the next surface site
             print(f'nonenode for {atom}')
-            return plus_sum, times_product
+            return plus_sum, times_product, matching_parents
         while node is not None and node.data is None:
             node = node.parent
         if node is None:
@@ -1730,14 +1734,22 @@ class ThermoDatabase(object):
 
         for nodename in self.plus_adjust:
             if nodename in parents:
-                plus_sum += self.plus_adjust[nodename]
+                amount = self.plus_adjust[nodename]
+                plus_sum += amount
+                if nodename not in matching_parents:
+                    matching_parents[nodename] = ''
+                matching_parents[nodename] += f'plus {amount} '
 
         for nodename in self.times_adjust:
             if nodename in parents:
-                times_product *= self.times_adjust[nodename]
+                amount = self.times_adjust[nodename]
+                times_product *= amount
+                if nodename not in matching_parents:
+                    matching_parents[nodename] = ''
+                matching_parents[nodename] += f'times {amount} '
         print(f'plus_sum={plus_sum}, times_product={times_product} for {atom}')
         print(f'parents={parents}')
-        return plus_sum, times_product
+        return plus_sum, times_product, matching_parents
 
     def _add_adsorption_correction(self, adsorption_thermo, adsorption_groups, molecule, surface_sites):
         """Add thermo adsorption correction(s) to estimate adsorbate thermo from gas phase.
