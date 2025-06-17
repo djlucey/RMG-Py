@@ -1570,7 +1570,10 @@ class ThermoDatabase(object):
         """
 
         if metal_to_scale_from == metal_to_scale_to:
-            return thermo
+            if not self.plus_adjust and not self.times_adjust:
+                return thermo
+            else:
+                metal_to_scale_to_binding_energies = self.surface['metal'].find_binding_energies(metal_to_scale_from)
 
         if metal_to_scale_to is None:
             metal_to_scale_to_binding_energies = self.binding_energies
@@ -1597,7 +1600,8 @@ class ThermoDatabase(object):
                 pass
 
         if all(-0.01 < v.value_si < 0.01 for v in delta_atomic_adsorption_energy.values()):
-            return thermo
+            if not self.plus_adjust and not self.times_adjust:
+                return thermo
 
         molecule = species.molecule[0]
 
@@ -1658,10 +1662,10 @@ class ThermoDatabase(object):
         thermo.H298.value_si += plus_total
         thermo.comment += f" Binding energy corrected by LSR ({'+'.join(comments)}) from {metal_to_scale_from} (H={change_in_binding_energy/1e3:+.0f}kJ/mol)"
         if plus_total != 0:
-            thermo.comment += f' plus ({plus_total})'
+            thermo.comment += f' plus manual adjustment ({plus_total})'
 
         if times_total != 1:
-            thermo.comment += f' times ({times_total})'
+            thermo.comment += f' times manual adjustment ({times_total})'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
