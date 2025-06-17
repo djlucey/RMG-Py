@@ -83,8 +83,7 @@ def database(
         kineticsDepositories='default',
         kineticsEstimator='rate rules',
         adsorptionGroups='adsorptionPt111',
-        #plus_adjust = None,
-        #times_adjust=None,
+
 ):
     # This function just stores the information about the database to be loaded
     # We don't actually load the database until after we're finished reading
@@ -161,8 +160,7 @@ def database(
         rmg.kinetics_families = kineticsFamilies
 
     rmg.adsorption_groups = adsorptionGroups
-    #rmg.plus_adjust = plus_adjust
-    #rmg.times_adjust = times_adjust
+
 
 def catalyst_properties(bindingEnergies=None,
                         surfaceSiteDensity=None,
