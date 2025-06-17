@@ -1573,7 +1573,7 @@ class ThermoDatabase(object):
         if times_total != 1:
             thermo.comment += f' times manual adjustment ({times_total})'
         for key in matching_parents_master:
-            thermo.comment += f', matching parent {key}: {matching_parents[key]}'
+            thermo.comment += f', matching parent {key}: {matching_parents_master[key]}'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
