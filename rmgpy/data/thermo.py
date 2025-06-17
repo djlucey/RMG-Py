@@ -215,11 +215,11 @@ def add_thermo_data(thermo_data1, thermo_data2, group_additivity=False, verbose=
         raise ValueError('Cannot add these ThermoData objects due to their having different temperature points.')
 
     for i in range(thermo_data1.Tdata.value_si.shape[0]):
-        thermo_data1.Cpdata.value_si[i] *= times
+        #thermo_data1.Cpdata.value_si[i] *= times
         thermo_data1.Cpdata.value_si[i] += (thermo_data2.Cpdata.value_si[i] + plus)
-    thermo_data1.H298.value_si *= times
+    #thermo_data1.H298.value_si *= times
     thermo_data1.H298.value_si += (thermo_data2.H298.value_si + plus)
-    thermo_data1.S298.value_si *= times
+    #thermo_data1.S298.value_si *= times
     thermo_data1.S298.value_si += (thermo_data2.S298.value_si + plus)
 
     test_zero = sum(abs(value) for value in
@@ -1521,7 +1521,7 @@ class ThermoDatabase(object):
             plus, times = self._find_plus_and_times_adjustments(site, molecule)
             plus_total += plus
             times_total *= times
-            print(f"plus={plus}, times={times} for {site}")
+            #print(f"plus={plus}, times={times} for {site}")
             numbonds = len(site.bonds)
             if numbonds == 0:
                 # vanDerWaals
@@ -1562,6 +1562,11 @@ class ThermoDatabase(object):
         thermo.H298.value_si *= times_total
         thermo.H298.value_si += plus_total
         thermo.comment += f" Binding energy corrected by LSR ({'+'.join(comments)}) from {metal_to_scale_from} (H={change_in_binding_energy/1e3:+.0f}kJ/mol)"
+        if plus_total != 0:
+            thermo.comment += f' plus ({plus_total})'
+
+        if times_total != 1:
+            thermo.comment += f' times ({times_total})'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
