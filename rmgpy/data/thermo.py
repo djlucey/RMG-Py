@@ -1564,9 +1564,8 @@ class ThermoDatabase(object):
                 except KeyError:
                     continue
                 comments.append(f'{bond:.2f}{element}')
-        thermo.H298.value_si += change_in_binding_energy
-        thermo.H298.value_si *= times_total
-        thermo.H298.value_si += plus_total
+        thermo.H298.value_si += (change_in_binding_energy * times_total) + plus_total
+        
         thermo.comment += f" Binding energy corrected by LSR ({'+'.join(comments)}) from {metal_to_scale_from} (H={change_in_binding_energy/1e3:+.0f}kJ/mol)"
         if plus_total != 0:
             thermo.comment += f' plus manual adjustment ({plus_total})'
