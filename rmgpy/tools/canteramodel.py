@@ -126,7 +126,7 @@ class CanteraCondition(object):
         string += 'mol_frac={0}, '.format(self.mol_frac.__repr__())
         if self.T0: string += 'T0={}, '.format(self.T0.__repr__())
         if self.P0: string += 'P0={}, '.format(self.P0.__repr__())
-        if self.V0: string += 'V0={}, '.format(self.V0__repr__())
+        if self.V0: string += 'V0={}, '.format(self.V0.__repr__())
         string = string[:-2] + ')'
         return string
 
@@ -191,8 +191,9 @@ def generate_cantera_conditions(reactor_type_list, reaction_time_list, mol_frac_
                             for i in range(len(reaction_time_list.value))]
 
     conditions = []
-    if surface_mol_frac_list is None:
-        surface_mol_frac_list = []  # initialize here to avoid mutable default argument
+    # For gas-phase runs the surface mole fraction list is optional; iterate once with None.
+    if surface_mol_frac_list is None or len(surface_mol_frac_list) == 0:
+        surface_mol_frac_list = [None]
 
     if Tlist is None:
         for reactor_type in reactor_type_list:
