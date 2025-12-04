@@ -1,0 +1,22 @@
+*** Collision rate limit violators report ***
+"Violation factor" is the ratio of the rate coefficient to the collision limit rate at the relevant conditions
+
+! PDep reaction: PDepNetwork #32
+! Flux pairs: N2(6), NNH(58); NH3(1), NH2(51); 
+N2(6)+NH3(1)(+M)<=>NNH(58)+NH2(51)(+M)              1.000e+00 0.000     0.000    
+    TCHEB/ 600.000   1800.000 /
+    PCHEB/ 0.099     9.869    /
+    CHEB/ 6 4/
+    CHEB/ -1.135e+01   -6.353e-10   -3.047e-10   -1.057e-10  /
+    CHEB/ 1.227e+01    5.779e-10    2.772e-10    9.621e-11   /
+    CHEB/ -2.141e-01   -1.178e-10   -5.652e-11   -1.961e-11  /
+    CHEB/ -3.565e-02   1.681e-11    8.062e-12    2.784e-12   /
+    CHEB/ -7.854e-03   2.869e-12    1.342e-12    4.594e-13   /
+    CHEB/ -1.628e-03   -2.724e-13   -1.385e-13   -4.288e-14  /
+DUPLICATE
+
+Direction: reverse
+Violation factor: 14.23
+Violation condition: 700.0 K, 1.0 bar
+
+

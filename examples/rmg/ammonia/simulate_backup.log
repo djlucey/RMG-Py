@@ -1,0 +1,161 @@
+Reading input file "/home/calvin/code/RMG-Py/examples/rmg/ammonia/input.py"...
+database(
+    # overrides RMG thermo calculation of RMG with these values.
+    # libraries found at http://rmg.mit.edu/database/thermo/libraries/
+    # if species exist in multiple libraries, the earlier libraries overwrite the
+    # previous values
+    thermoLibraries=['BurkeH2O2', 'primaryThermoLibrary', 'DFT_QCI_thermo', 'CBS_QB3_1dHR', 'NH3', 'NitrogenCurran','NOx2018'],
+    # overrides RMG transport calculations with these values.
+    # if species exist in multiple libraries, the earlier libraries overwrite the previous values
+    transportLibraries=['PrimaryTransportLibrary'],
+    # overrides RMG kinetics estimation if needed in the core of RMG.
+    # list of libraries found at http://rmg.mit.edu/database/kinetics/libraries/
+    # libraries can be input as either a string or tuple of form ('library_name',True/False)
+    # where a `True` indicates that all unused reactions will be automatically added
+    # to the chemkin file at the end of the simulation. Placing just string values
+    # defaults the tuple to `False`. The string input is sufficient in almost
+    # all situations
+    reactionLibraries=['primaryNitrogenLibrary'],
+    # seed mechanisms are reactionLibraries that are forced into the initial mechanism
+    # in addition to species listed in this input file.
+    # This is helpful for reducing run time for species you know will appear in
+    # the mechanism.
+    seedMechanisms=['primaryH2O2'],
+    # lists specific families used to generate the model. 'default' uses a list of
+    # families from RMG-Database/input/kinetics/families/recommended.py
+    # a visual list of families is available in PDF form at RMG-database/families
+    kineticsFamilies='default',
+    # this is normally not changed in general RMG runs.  Usually used for testing with
+    # outside kinetics databases
+    kineticsDepositories='default',
+    # specifies how RMG calculates rates.  currently, the only option is 'rate rules'
+    kineticsEstimator='rate rules',
+)
+
+species(
+    label='NH3',
+    reactive=True,
+    structure=SMILES('N'),
+)
+
+species(
+    label='O2',
+    reactive=True,
+    structure=SMILES('[O][O]'),
+)
+
+species(
+    label="Ar",
+    reactive=False,
+    structure=SMILES('[Ar]'),
+)
+
+# Inlet composition
+# lamba = 0.1
+#  NH3 - 2%
+#  O2  - 15%
+#  Ar  - 83%
+
+simpleReactor(
+    temperature=[(700,'K'),(1200,'K')],
+    pressure=(1.0,'atm'),
+    initialMoleFractions={
+        "NH3": 0.02,
+        "O2": 0.15,
+        "Ar": 0.83,
+    },
+    terminationTime=(3,'s'),
+    nSims=11,
+    sensitivity=['NH3', 'O2'],
+    sensitivityThreshold=0.01,
+)
+
+model(
+    toleranceMoveToCore        = 0.1,
+    toleranceKeepInEdge        = 0.01,
+    toleranceInterruptSimulation = 1,
+    maximumEdgeSpecies         = 100000,
+    minCoreSizeForPrune        = 50,
+    minSpeciesExistIterationsForPrune = 2,
+    filterReactions            = False,
+    filterThreshold            = 1e8,
+)
+
+
+simulator(
+    atol = 1e-16,
+    rtol = 1e-8,
+    # sens_atol = 1e-6,
+    # sens_rtol = 1e-4,
+)
+
+options(
+    name                    = 'NH3_oxidation_JSR',
+    generateSeedEachIteration = True,
+    saveSeedToDatabase      = False,
+    units                   = 'si',
+    generateOutputHTML      = True,
+    generatePlots           = False,
+    generatePESDiagrams     = False,
+    saveSimulationProfiles  = True,
+    verboseComments         = False,
+    saveEdgeSpecies         = False,
+    keepIrreversible        = False,
+    trimolecularProductReversible = True,
+    saveSeedModulus         = -1,
+    # wallTime               = '01:00:00',
+)
+
+generatedSpeciesConstraints(
+    allowed = ['input species', 'seed mechanisms', 'reaction libraries'],
+    maximumCarbonAtoms       = 1,
+    maximumOxygenAtoms       = 4,
+    maximumNitrogenAtoms     = 2,  # NH3, NOx, N2O, N2
+    maximumSiliconAtoms      = 0,
+    maximumSulfurAtoms       = 0,
+    maximumSurfaceSites      = 0,
+    maximumSurfaceBondOrder  = 0,
+    maximumRadicalElectrons  = 2,
+    maximumSingletCarbenes   = 0,
+    maximumCarbeneRadicals   = 0,
+    allowSingletO2=True,
+)
+
+pressureDependence(
+    method = 'modified strong collision',
+    maximumGrainSize = (0.5, 'kcal/mol'),
+    minimumNumberOfGrains = 250,
+    # Match the JSR temperature window
+    temperatures = (600.0, 1800.0, 'K', 9),   # 9 internal T points
+    # Give a modest pressure window around 1 atm
+    pressures = (0.1, 10.0, 'bar', 5),        # 5 internal P points
+    interpolation = ('Chebyshev', 6, 4),      # (T basis, P basis)
+    maximumAtoms = 15,                        # enough for NHx/NOx species
+)
+
+Warning: Generate Output HTML option was turned on. Note that this will slow down model generation.
+
+Thermo file has default temperature range 300.0 to 1000.0 and 1000.0 to 5000.0
+Conducting simulation and sensitivity analysis of reaction system 1.1...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.2...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.3...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.4...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.5...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.6...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.7...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.8...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.9...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.10...
+At time 3.0000e+00 s, reached target termination time.
+Conducting simulation and sensitivity analysis of reaction system 1.11...
+At time 3.0000e+00 s, reached target termination time.
+Simulation took 15.443425178527832 seconds

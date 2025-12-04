@@ -41,6 +41,55 @@ from rmgpy.tools.loader import load_rmg_job
 from rmgpy.tools.plot import plot_sensitivity
 
 
+def _build_condition_list(reaction_system):
+    """
+    Create a list of condition dictionaries for ranged reactors.
+
+    If no ranged parameters are present, a single ``None`` entry is returned,
+    indicating that the stored reactor conditions should be used.
+    """
+    ranges = {}
+    if getattr(reaction_system, "Trange", None):
+        ranges["T"] = [reaction_system.Trange[0].value_si, reaction_system.Trange[1].value_si]
+    if getattr(reaction_system, "Prange", None):
+        ranges["P"] = [reaction_system.Prange[0].value_si, reaction_system.Prange[1].value_si]
+
+    if hasattr(reaction_system, "initial_mole_fractions"):
+        for spc, value in reaction_system.initial_mole_fractions.items():
+            if isinstance(value, list):
+                ranges[spc] = value
+
+    if not ranges:
+        return [None]
+
+    n_sims = getattr(reaction_system, "n_sims", 1) or 1
+    fractions = [idx / (n_sims - 1) if n_sims > 1 else 0.0 for idx in range(n_sims)]
+
+    condition_list = []
+    for frac in fractions:
+        cond = {}
+        for key, (low, high) in ranges.items():
+            cond[key] = low + frac * (high - low)
+
+        # include any fixed species values that were not ranged
+        if hasattr(reaction_system, "initial_mole_fractions"):
+            for spc, value in reaction_system.initial_mole_fractions.items():
+                if spc not in cond:
+                    cond[spc] = value
+
+        # normalize mole fractions if species are present
+        species_keys = [k for k in cond.keys() if k not in ("T", "P")]
+        if species_keys:
+            total = sum(cond[k] for k in species_keys)
+            if total:
+                for key in species_keys:
+                    cond[key] /= total
+
+        condition_list.append(cond)
+
+    return condition_list
+
+
 def simulate(rmg, diffusion_limited=True):
     """
     Simulate the RMG job and run the sensitivity analysis if it is on, generating
@@ -52,24 +101,7 @@ def simulate(rmg, diffusion_limited=True):
 
     for index, reaction_system in enumerate(rmg.reaction_systems):
 
-        if reaction_system.sensitive_species:
-            logging.info('Conducting simulation and sensitivity analysis of reaction system %s...' % (index + 1))
-            if reaction_system.sensitive_species == ['all']:
-                reaction_system.sensitive_species = rmg.reaction_model.core.species
-
-        else:
-            logging.info('Conducting simulation of reaction system %s...' % (index + 1))
-
-        reaction_system.attach(SimulationProfileWriter(
-            rmg.output_directory, index, rmg.reaction_model.core.species))
-        reaction_system.attach(SimulationProfilePlotter(
-            rmg.output_directory, index, rmg.reaction_model.core.species))
-
-        sens_worksheet = []
-        for spec in reaction_system.sensitive_species:
-            csvfile_path = os.path.join(rmg.output_directory, 'solver',
-                                        'sensitivity_{0}_SPC_{1}.csv'.format(index + 1, spec.index))
-            sens_worksheet.append(csvfile_path)
+        condition_list = _build_condition_list(reaction_system)
 
         pdep_networks = []
         for source, networks in rmg.reaction_model.network_dict.items():
@@ -91,23 +123,53 @@ def simulate(rmg, diffusion_limited=True):
         if reaction_system.const_spc_names is not None:
             reaction_system.get_const_spc_indices(rmg.reaction_model.core.species)
 
-        reaction_system.simulate(
-            core_species=rmg.reaction_model.core.species,
-            core_reactions=rmg.reaction_model.core.reactions,
-            edge_species=rmg.reaction_model.edge.species,
-            edge_reactions=rmg.reaction_model.edge.reactions,
-            surface_species=[],
-            surface_reactions=[],
-            pdep_networks=pdep_networks,
-            sensitivity=True if reaction_system.sensitive_species else False,
-            sens_worksheet=sens_worksheet,
-            model_settings=model_settings,
-            simulator_settings=simulator_settings,
-        )
+        for cond_index, conditions in enumerate(condition_list):
+            sim_label = f"{index + 1}" if len(condition_list) == 1 else f"{index + 1}.{cond_index + 1}"
+            run_index = cond_index + index * len(condition_list)
 
-        if reaction_system.sensitive_species:
-            plot_sensitivity(rmg.output_directory, index, reaction_system.sensitive_species)
-            rmg.run_uncertainty_analysis()
+            if reaction_system.sensitive_species:
+                logging.info('Conducting simulation and sensitivity analysis of reaction system %s...' % sim_label)
+                if reaction_system.sensitive_species == ['all']:
+                    reaction_system.sensitive_species = rmg.reaction_model.core.species
+            else:
+                logging.info('Conducting simulation of reaction system %s...' % sim_label)
+
+            writer = SimulationProfileWriter(
+                rmg.output_directory, run_index, rmg.reaction_model.core.species)
+            plotter = SimulationProfilePlotter(
+                rmg.output_directory, run_index, rmg.reaction_model.core.species)
+            reaction_system.attach(writer)
+            reaction_system.attach(plotter)
+
+            sens_worksheet = []
+            for spec in reaction_system.sensitive_species:
+                csvfile_path = os.path.join(
+                    rmg.output_directory, 'solver',
+                    'sensitivity_{0}_SPC_{1}.csv'.format(run_index + 1, spec.index))
+                sens_worksheet.append(csvfile_path)
+
+            reaction_system.simulate(
+                core_species=rmg.reaction_model.core.species,
+                core_reactions=rmg.reaction_model.core.reactions,
+                edge_species=rmg.reaction_model.edge.species,
+                edge_reactions=rmg.reaction_model.edge.reactions,
+                surface_species=[],
+                surface_reactions=[],
+                pdep_networks=pdep_networks,
+                sensitivity=True if reaction_system.sensitive_species else False,
+                sens_worksheet=sens_worksheet,
+                model_settings=model_settings,
+                simulator_settings=simulator_settings,
+                conditions=conditions if conditions else None,
+            )
+
+            reaction_system.detach(writer)
+            reaction_system.detach(plotter)
+
+            if reaction_system.sensitive_species:
+                plot_sensitivity(rmg.output_directory, run_index,
+                                 reaction_system.sensitive_species)
+                rmg.run_uncertainty_analysis()
 
 
 def run_simulation(input_file, chemkin_file, dict_file, diffusion_limited=True, check_duplicates=True):
