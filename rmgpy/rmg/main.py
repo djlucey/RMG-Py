@@ -651,7 +651,9 @@ class RMG(util.Subject):
         # Initialize reaction model
 
         for spec in self.initial_species:
-            if spec.reactive:
+            # Non-reactive species defined in the input before the database is loaded
+            # may not have thermo yet; ensure thermo exists for any such species.
+            if spec.thermo is None or spec.reactive:
                 submit(spec, self.solvent)
             if vapor_liquid_mass_transfer.enabled:
                 spec.get_liquid_volumetric_mass_transfer_coefficient_data()
