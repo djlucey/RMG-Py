@@ -93,6 +93,8 @@ def main(model1=None, model2=None, model3=None, model4=None, model5=None, output
         elif len(model) == 3:
             transport = True
             input_model_files.append((model[0], model[1], model[2]))
+        elif len(model) == 4:
+            input_model_files.append((model[0], model[1], model[2], model[3]))
         else:
             raise Exception
 
