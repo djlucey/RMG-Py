@@ -61,23 +61,31 @@ def parse_command_line_arguments():
                         help='the Chemkin files and species dictionaries of the fourth model to merge')
     parser.add_argument('--model5', metavar='FILE', type=str, nargs='+',
                         help='the Chemkin files and species dictionaries of the fifth model to merge')
-
+    # also add output path option in case we want to specify output location
+    parser.add_argument('--output', type=str, nargs='+',
+                        help='output location')
     args = parser.parse_args()
     return args
 
 
 
 
-def main():
+def main(model1=None, model2=None, model3=None, model4=None, model5=None, output=None):
     """
     Driver function that parses command line arguments and passes them to the execute function.
     """
     # Parse the command-line arguments (requires the argparse module)
-    args = parse_command_line_arguments()
+    if model1 is None and model2 is None and model3 is None and model4 is None and model5 is None:
+        args = parse_command_line_arguments()
+        model_list = [args.model1, args.model2, args.model3, args.model4, args.model5]
+        chosen_output = args.output[0] if args.output is not None else None
+    else:
+        model_list = [model1, model2, model3, model4, model5]
+        chosen_output = output
 
     transport = False
     input_model_files = []
-    for model in [args.model1, args.model2, args.model3, args.model4, args.model5]:
+    for model in model_list:
         if model is None:
             continue
         if len(model) == 2:
@@ -88,8 +96,15 @@ def main():
         else:
             raise Exception
 
+    if chosen_output is None:
+        directory = os.getcwd()
+    else:
+        directory = chosen_output
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
     kwargs = {
-        'wd': os.getcwd(),
+        'wd': directory,
         'transport': transport,
     }
 
