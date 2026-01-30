@@ -43,7 +43,7 @@ import argparse
 import os
 import os.path
 
-from rmgpy.chemkin import load_chemkin_file, save_chemkin_file, save_species_dictionary, save_transport_file
+from rmgpy.chemkin import load_chemkin_file, save_chemkin_file, save_species_dictionary, save_transport_file, save_chemkin_surface_file
 from rmgpy.rmg.model import ReactionModel
 
 
@@ -95,6 +95,7 @@ def main(model1=None, model2=None, model3=None, model4=None, model5=None, output
             input_model_files.append((model[0], model[1], model[2]))
         elif len(model) == 4:
             input_model_files.append((model[0], model[1], model[2], model[3]))
+            surface = True
         else:
             raise Exception
 
@@ -108,6 +109,7 @@ def main(model1=None, model2=None, model3=None, model4=None, model5=None, output
     kwargs = {
         'wd': directory,
         'transport': transport,
+        'surface': surface,
     }
 
     execute(input_model_files, **kwargs)
@@ -120,10 +122,12 @@ def execute(input_model_files, **kwargs):
         wd = os.getcwd()
 
     transport = kwargs['transport']
+    surface = kwargs['surface']
 
-    output_chemkin_file = os.path.join(wd, 'chem.inp')
+    output_chemkin_file = os.path.join(wd, 'chem-gas.inp')
     output_species_dictionary = os.path.join(wd, 'species_dictionary.txt')
     output_transport_file = os.path.join(wd, 'tran.dat') if transport else None
+    output_surface_file = os.path.join(wd, 'chem_surface.inp') if transport else None
 
     models = get_models_to_merge(input_model_files)
 
@@ -134,11 +138,15 @@ def execute(input_model_files, **kwargs):
     save_species_dictionary(output_species_dictionary, final_model.species)
     if transport:
         save_transport_file(output_transport_file, final_model.species)
+    if surface:
+        save_chemkin_surface_file(output_surface_file, final_model.species, final_model.reactions)
 
     print('Merged Chemkin file saved to {0}'.format(output_chemkin_file))
     print('Merged species dictionary saved to {0}'.format(output_species_dictionary))
     if transport:
         print('Merged transport file saved to {0}'.format(output_transport_file))
+    if surface:
+        print('Merged surface Chemkin file saved to {0}'.format(output_surface_file))
 
 
 def get_models_to_merge(input_model_files):
