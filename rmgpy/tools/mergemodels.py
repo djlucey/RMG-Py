@@ -70,18 +70,15 @@ def parse_command_line_arguments():
 
 
 
-def main(model1=None, model2=None, model3=None, model4=None, model5=None, output=None):
+def main():
     """
     Driver function that parses command line arguments and passes them to the execute function.
     """
     # Parse the command-line arguments (requires the argparse module)
-    if model1 is None and model2 is None and model3 is None and model4 is None and model5 is None:
-        args = parse_command_line_arguments()
-        model_list = [args.model1, args.model2, args.model3, args.model4, args.model5]
-        chosen_output = args.output[0] if args.output is not None else None
-    else:
-        model_list = [model1, model2, model3, model4, model5]
-        chosen_output = output
+
+    args = parse_command_line_arguments()
+    model_list = [args.model1, args.model2, args.model3, args.model4, args.model5]
+    chosen_output = args.output[0] if args.output is not None else None
 
     transport = False
     input_model_files = []
@@ -127,7 +124,7 @@ def execute(input_model_files, **kwargs):
     output_chemkin_file = os.path.join(wd, 'chem-gas.inp')
     output_species_dictionary = os.path.join(wd, 'species_dictionary.txt')
     output_transport_file = os.path.join(wd, 'tran.dat') if transport else None
-    output_surface_file = os.path.join(wd, 'chem_surface.inp') if transport else None
+    output_surface_file = os.path.join(wd, 'chem_surface.inp') if surface else None
 
     models = get_models_to_merge(input_model_files)
 
@@ -156,10 +153,10 @@ def get_models_to_merge(input_model_files):
     models = []
 
     for entry in input_model_files:
-        if not (3 <= len(entry) <= 4):
-            raise ValueError(f"Each model input must have 3 or 4 elements: {entry}")
         
-        chemkin, species_path, transport_path = entry[:3]
+        chemkin = entry[0]
+        species_path = entry[1]
+        transport_path = entry[2] if len(entry) >= 3 else None
         surface_path = entry[3] if len(entry) == 4 else None
 
         print(f'Loading model #{len(models) + 1}...')
