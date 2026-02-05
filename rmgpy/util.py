@@ -288,6 +288,9 @@ def parse_command_line_arguments(command_line_args=None):
     parser.add_argument('-r', '--restart', type=str, nargs=1, metavar='path/to/seed/', help='restart RMG from a seed',
                         default='')
 
+    parser.add_argument('-re', '--recalc', type=str, nargs=1, metavar='path/to/seed/', help='recalculate RMG from a seed',
+                        default='')
+
     parser.add_argument('-p', '--profile', action='store_true',
                         help='run under cProfile to gather profiling statistics, and postprocess them if job completes')
     parser.add_argument('-P', '--postprocess', action='store_true',
@@ -322,6 +325,9 @@ def parse_command_line_arguments(command_line_args=None):
 
     if args.restart:
         args.restart = args.restart[0]
+
+    if args.recalc:
+        args.recalc = args.recalc[0]
 
     if args.maxiter:
         args.maxiter = args.maxiter[0]
