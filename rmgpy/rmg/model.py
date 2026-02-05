@@ -66,6 +66,7 @@ from rmgpy.rmg.reactionmechanismsimulator_reactors import (
 from rmgpy.rmg.reactionmechanismsimulator_reactors import Reactor as RMSReactor
 from rmgpy.species import Species
 from rmgpy.thermo.thermoengine import submit
+from rmgpy.kinetics.model import PDepKineticsModel
 
 ################################################################################
 
@@ -260,6 +261,7 @@ class CoreEdgeReactionModel:
         self.new_surface_rxns_loss = set()
         self.solvent_name = ""
         self.surface_site_density = None
+        self.recalc = False
         self.unrealgroups = [
             Group().from_adjacency_list(
                 """
@@ -1670,7 +1672,7 @@ class CoreEdgeReactionModel:
                     stoichiometry[i, j] = nu
         return stoichiometry.tocsr()
 
-    def add_seed_mechanism_to_core(self, seed_mechanism, react=False, requires_rms=False):
+    def add_seed_mechanism_to_core(self, seed_mech, react=False, requires_rms=False):
         """
         Add all species and reactions from `seed_mechanism`, a
         :class:`KineticsPrimaryDatabase` object, to the model core. If `react`
@@ -1696,13 +1698,50 @@ class CoreEdgeReactionModel:
         num_old_core_species = len(self.core.species)
         num_old_core_reactions = len(self.core.reactions)
 
-        logging.info("Adding seed mechanism {0} to model core...".format(seed_mechanism))
+        logging.info("Adding seed mechanism {0} to model core...".format(seed_mech))
 
-        seed_mechanism = database.kinetics.libraries[seed_mechanism]
-
+        seed_mechanism = database.kinetics.libraries[seed_mech]
+        if self.recalc:
+            database.kinetics.libraries.pop(seed_mech)
+            database.kinetics.library_order = [lib for lib in database.kinetics.library_order if lib[0] != seed_mech]
         rxns = seed_mechanism.get_library_reactions()
 
         for rxn in rxns:
+            if self.recalc:
+                
+                #rxn.recalculate_as_new_reaction(database.kinetics) ??
+                # update libraries by removing the seed mechanism as a library
+                 # remove the seed mechanism from libraries to force re-estimation
+
+                logging.info(f'estimating rate of reaction  using RMG-database')
+
+                if not all([spec != None for spec in rxn.reactants + rxn.products]):
+                    raise ValueError('chemical structures of reactants and products not available for RMG estimation of '
+                                    'reaction')
+
+                reactions = database.kinetics.generate_reactions_from_libraries(reactants=rxn.reactants, products=rxn.products)
+                reactions = [r for r in reactions if r.elementary_high_p]
+                boo = False
+
+                if reactions:
+                    for r in reactions:
+                        if isinstance(rxn.kinetics, PDepKineticsModel):
+                            boo = rxn.generate_high_p_limit_kinetics()
+                        if boo:
+                            rxn = r
+                            break
+
+                if reactions == [] or not boo:
+                    logging.info('No library reactions tagged with elementary_high_p found for reaction, generating '
+                                'reactions from RMG families')
+                    rxn = list(database.kinetics.generate_reactions_from_families(reactants=rxn.reactants, products=rxn.products))
+                    print(rxn)
+                    for re in rxn:
+                        for spec in re.reactants + re.products:
+                            self.generate_thermo(spec)
+                        self.apply_kinetics_to_reaction(re)
+                    rxn = re  # take the last reaction if multiple were generated
+
             if (
                 isinstance(rxn, LibraryReaction) and not (rxn.library in library_names) and not (rxn.library == "kineticsjobs")
             ):  # if one of the reactions in the library is from another library load that library
@@ -1851,7 +1890,7 @@ class CoreEdgeReactionModel:
                     duplicate=rxn.duplicate,
                     reversible=rxn.reversible,
                 )
-            r, isNew = self.make_new_reaction(rxn)  # updates self.new_species_list and self.new_reaction_list
+            r, isNew = self.make_new_reaction(rxn, check_existing=not self.recalc)  # updates self.new_species_list and self.new_reaction_list
             if r is not None and getattr(rxn.kinetics, "coverage_dependence", None):
                 self.process_coverage_dependence(r.kinetics)
             if not isNew:

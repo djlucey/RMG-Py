@@ -256,6 +256,7 @@ class RMG(util.Subject):
         self.initialization_time = 0
         self.kinetics_datastore = None
         self.restart = False
+        self.recalc = False
         self.core_seed_path = None
         self.edge_seed_path = None
         self.filters_path = None
@@ -447,6 +448,7 @@ class RMG(util.Subject):
             adsorption_groups=Pt111_adsorption, # use Pt111 groups for training reactions
             # frequenciesLibraries = self.statmech_libraries,
             depository=False,  # Don't bother loading the depository information, as we don't use it
+            recalc=self.recalc,
         )
 
         # Turn off reversibility for families with three products if desired
@@ -567,8 +569,11 @@ class RMG(util.Subject):
 
         if kwargs.get("restart", ""):
             import rmgpy.rmg.input
-
             rmgpy.rmg.input.restart_from_seed(path=kwargs["restart"])
+
+        if kwargs.get("recalc", ""):
+            import rmgpy.rmg.input
+            rmgpy.rmg.input.recalc_from_seed(path=kwargs["recalc"])
 
         # Check input file
         self.check_input()
@@ -710,7 +715,9 @@ class RMG(util.Subject):
         # Seed mechanisms: add species and reactions from seed mechanism
         # DON'T generate any more reactions for the seed species at this time
         for seed_mechanism in self.seed_mechanisms:
+            self.reaction_model.recalc = self.recalc
             self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
+        
 
         # Reaction libraries: add species and reactions from reaction library to the edge so
         # that RMG can find them if their rates are large enough
@@ -892,6 +899,9 @@ class RMG(util.Subject):
 
         logging.info("Initialization complete. Starting model generation.\n")
 
+        if self.recalc:
+            logging.info("Recalculating.\n")
+
         # Initiate first reaction discovery step after adding all core species
         for index, reaction_system in enumerate(self.reaction_systems):
             # Initialize memory object to track conditions for ranged reactors
@@ -940,13 +950,15 @@ class RMG(util.Subject):
                 logging.info("Generating initial reactions...")
 
             # React core species to enlarge edge
-            self.reaction_model.enlarge(
-                react_edge=True,
-                unimolecular_react=self.unimolecular_react,
-                bimolecular_react=self.bimolecular_react,
-                trimolecular_react=self.trimolecular_react,
-                requires_rms=requires_rms,
-            )
+            edge_react = True
+            if not self.recalc:
+                self.reaction_model.enlarge(
+                    react_edge=edge_react,
+                    unimolecular_react=self.unimolecular_react,
+                    bimolecular_react=self.bimolecular_react,
+                    trimolecular_react=self.trimolecular_react,
+                    requires_rms=requires_rms,
+                )
 
         if not np.isinf(self.model_settings_list[0].thermo_tol_keep_spc_in_edge):
             self.reaction_model.set_thermodynamic_filtering_parameters(
@@ -981,6 +993,8 @@ class RMG(util.Subject):
             logging.info(f"Beginning model generation stage {q + 1} of {len(self.model_settings_list)}.\n")
 
             self.done = False
+            if self.recalc:
+                self.done = True
 
             # Main RMG loop
             while not self.done:
