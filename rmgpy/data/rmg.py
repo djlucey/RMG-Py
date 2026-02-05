@@ -161,10 +161,9 @@ class RMGDatabase(object):
         if seed_mechanisms is None and reaction_libraries is None:
             kinetics_libraries = None
         if seed_mechanisms is not None:
-            if recalc is None:
-                for library in seed_mechanisms:
-                    kinetics_libraries.append(library)
-                    library_order.append((library, 'Seed'))
+            for library in seed_mechanisms:
+                kinetics_libraries.append(library)
+                library_order.append((library, 'Seed'))
         if reaction_libraries is not None:
             for library in reaction_libraries:
                 kinetics_libraries.append(library)
