@@ -173,7 +173,7 @@ def get_models_to_merge(input_model_files):
     return models
 
 
-def combine_models(models):
+def combine_models(models, allow_duplicates=False):
     """
     Takes in a list of ReactionModels and and merges them into a single ReactionModel
     Reindexes species with the same label and index
@@ -183,7 +183,7 @@ def combine_models(models):
         print('Ignoring common species and reactions from model #{0:d}...'.format(i + 1))
         nspec0 = len(final_model.species)
         nrxn0 = len(final_model.reactions)
-        final_model = final_model.merge(model)
+        final_model = final_model.merge(model, allow_dups=allow_duplicates)
         nspec = len(final_model.species)
         nrxn = len(final_model.reactions)
         if len(model.species) > 0:
