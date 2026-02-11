@@ -63,6 +63,7 @@ def main():
     kwargs = {
         'restart': args.restart,
         'recalc': args.recalc,
+        "recalc_yaml": args.recalc_yaml,
         'maxproc': args.maxproc,
         'kineticsdatastore': args.kineticsdatastore,
     }

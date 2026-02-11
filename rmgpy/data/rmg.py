@@ -85,7 +85,8 @@ class RMGDatabase(object):
              solvation=True,
              surface=True,  # on by default, because solvation is also on by default
              testing=False,
-             recalc=None
+             recalc=None,
+             recalc_yaml=None
              ):
         """
         Load the RMG database from the given `path` on disk, where `path`
