@@ -1652,6 +1652,10 @@ def restart_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, spe
 def recalc_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, speciesMap=None):
     rmg.recalc = True
     restart_from_seed(path, coreSeed, edgeSeed, filters, speciesMap)
+def recalc_from_yaml(yaml=None, dictionary=None):
+    rmg.recalc = True
+    rmg.recalc_yaml = yaml
+    rmg.recalc_dict = dictionary
 
 
 
@@ -1742,6 +1746,7 @@ def read_input_file(path, rmg0):
         'uncertainty': uncertainty,
         'restartFromSeed': restart_from_seed,
         'recalcFromSeed': recalc_from_seed,
+        'recalcFromYaml': recalc_from_yaml,
     }
 
     thermo_libraries = rmg0.thermo_libraries if isinstance(rmg0.thermo_libraries, list) else None
