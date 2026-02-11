@@ -257,10 +257,13 @@ class RMG(util.Subject):
         self.kinetics_datastore = None
         self.restart = False
         self.recalc = False
+        self.recalc_yaml = None
         self.core_seed_path = None
         self.edge_seed_path = None
         self.filters_path = None
         self.species_map_path = None
+        self.recalc_dict = None
+        self.recalc_yaml = None
 
         self.name = "Seed"
         self.generate_seed_each_iteration = True
@@ -449,6 +452,7 @@ class RMG(util.Subject):
             # frequenciesLibraries = self.statmech_libraries,
             depository=False,  # Don't bother loading the depository information, as we don't use it
             recalc=self.recalc,
+            recalc_yaml=self.recalc_yaml,
         )
 
         # Turn off reversibility for families with three products if desired
@@ -657,7 +661,7 @@ class RMG(util.Subject):
             shutil.copyfile(self.species_map_path, os.path.join(filters_restart, "species_map.yml"))
 
             # Load the seed mechanism to get the core and edge species
-            self.database.kinetics.load_libraries(restart_dir)#, libraries=["restart", "restart_edge"])
+            self.database.kinetics.load_libraries(restart_dir, recalc = self.recalc)#, libraries=["restart", "restart_edge"])
             self.seed_mechanisms.append("restart")
 #            self.reaction_libraries.append(("restart_edge", False))
 
@@ -716,13 +720,19 @@ class RMG(util.Subject):
         # DON'T generate any more reactions for the seed species at this time
         for seed_mechanism in self.seed_mechanisms:
             self.reaction_model.recalc = self.recalc
-            self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
-        
+            if self.recalc:
+                self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
+
+        if self.recalc_yaml:
+            self.reaction_model.recalc = self.recalc
+            self.reaction_model.recalc_yaml = self.recalc_yaml
+            self.reaction_model.add_seed_mechanism_to_core(self.recalc_dict, react=False, requires_rms=requires_rms, recalc_yaml=self.recalc_yaml)
 
         # Reaction libraries: add species and reactions from reaction library to the edge so
         # that RMG can find them if their rates are large enough
         for library, option in self.reaction_libraries:
-            self.reaction_model.add_reaction_library_to_edge(library, requires_rms=requires_rms)
+            if not self.recalc:
+                self.reaction_model.add_reaction_library_to_edge(library, requires_rms=requires_rms)
 
         # Also always add in a few bath gases (since RMG-Java does)
         for label, smiles in [("Ar", "[Ar]"), ("He", "[He]"), ("Ne", "[Ne]"), ("N2", "N#N")]:
@@ -901,6 +911,10 @@ class RMG(util.Subject):
 
         if self.recalc:
             logging.info("Recalculating.\n")
+            # do not filter reactions and do not enlarge edge since we're just recalculating the existing model
+            self.filter_reactions = False
+            self.enlarge_edge = False
+            self.generate_seed_each_iteration = False
 
         # Initiate first reaction discovery step after adding all core species
         for index, reaction_system in enumerate(self.reaction_systems):
