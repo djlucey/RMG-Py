@@ -148,6 +148,7 @@ class ReactionModel:
                     rxn.duplicate = False
                     unique_reactions.append(rxn)
 
+
         # Add the unique species from other to the final model
         final_model.species.extend(unique_species)
 
