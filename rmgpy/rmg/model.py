@@ -146,7 +146,6 @@ class ReactionModel:
                 if should_add:
                     unique_reactions.append(rxn)
 
-
         # Add the unique species from other to the final model
         final_model.species.extend(unique_species)
 
@@ -1768,16 +1767,7 @@ class CoreEdgeReactionModel:
 
                 reactions = database.kinetics.generate_reactions_from_libraries(reactants=reacts, products=prods)
                 logging.info(f'{len(reactions)} reactions found from libraries for reaction {rxn}')
-                #reactions = [r for r in reactions]
-                #boo = False
 
-                #if reactions:
-                    #for r in reactions:
-                        #if isinstance(rxn.kinetics, PDepKineticsModel):
-                            #boo = rxn.generate_high_p_limit_kinetics()
-                        #if boo:
-                            #rxn = r
-                            #break
                 if reactions == []:
                     logging.info('No library reactions tagged with elementary_high_p found for reaction, generating '
                                 'reactions from RMG families')
