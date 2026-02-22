@@ -134,16 +134,17 @@ class ReactionModel:
                         print("Reaction {0} kinetics from model 1 did not match that of model 2.".format(str(rxn0)))
                     break
             else:
-                # make sure its not in unique reactions already
                 should_add = True
                 if not allow_dups:
-                    if rxn.duplicate:
-                        for rxn0 in unique_reactions:
-                            if rxn.is_isomorphic(rxn0, either_direction=True):
-                                should_add = False
-                                break
-
+                    # Check against reactions already accepted
+                    for rxn0 in unique_reactions:
+                        if rxn.is_isomorphic(rxn0, either_direction=True):
+                            should_add = False
+                            break
                 if should_add:
+                    # Since we only allow one structural copy,
+                    # this reaction is no longer a duplicate
+                    rxn.duplicate = False
                     unique_reactions.append(rxn)
 
         # Add the unique species from other to the final model
