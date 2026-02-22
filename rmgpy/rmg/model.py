@@ -1725,18 +1725,25 @@ class CoreEdgeReactionModel:
                 surface_reactions = surface.reactions()
                 for reaction in gas_reactions + surface_reactions:
                     newlist = [[],[], reaction.duplicate]
+                    missing_species = []
                     for label in reaction.reactants:
                         amt = reaction.reactants[label]
                         if label in species_dict:
                             spec = species_dict[label]
                             for _ in range(int(amt)):
                                 newlist[0].append(spec.copy(deep=True))
+                        else:
+                            missing_species.append(label)
                     for label in reaction.products:
                         if label in species_dict:
                             spec = species_dict[label]
                             amt = reaction.products[label]
                             for _ in range(int(amt)):
                                 newlist[1].append(spec.copy(deep=True))
+                        else:
+                            missing_species.append(label)
+                    if missing_species:
+                        logging.warning(f'Reaction {reaction} skipped: species {missing_species} not found in species dictionary')
                     rxns.append(newlist)
             else:
                 database.kinetics.libraries.pop(seed_mech)
@@ -1761,6 +1768,11 @@ class CoreEdgeReactionModel:
                 if not all([spec != None for spec in reacts + prods]):
                     raise ValueError('chemical structures of reactants and products not available for RMG estimation of '
                                     'reaction')
+                
+                if len(reacts) == 0 or len(prods) == 0:
+                    logging.warning(f'Skipping reaction with empty reactants or products. Reactants: {reacts}, Products: {prods}')
+                    logging.warning('This may occur when species from the YAML file are not found in the species dictionary.')
+                    continue
                 
                 logging.info('reactants:{0}, products:{1}'.format(reacts, prods))
 
