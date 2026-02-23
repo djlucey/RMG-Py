@@ -1614,13 +1614,14 @@ class ThermoDatabase(object):
         plus_total = 0
         times_total = 1
         matching_parents_master = {}
+        parents_master = {}
         max_bond_order = {'C': 4., 'O': 2., 'N': 3., 'H': 1., 'F': 1, 'Li': 1.}
         for site in surface_sites:
-            plus, times, matching_parents = self._find_plus_and_times_adjustments(site, molecule)
+            plus, times, matching_parents, parents = self._find_plus_and_times_adjustments(site, molecule)
             plus_total += plus
             times_total *= times
             matching_parents_master.update(matching_parents)
-            #print(f"plus={plus}, times={times} for {site}")
+            parents_master[site.label] = parents
             numbonds = len(site.bonds)
             if numbonds == 0:
                 # vanDerWaals
@@ -1668,6 +1669,8 @@ class ThermoDatabase(object):
             thermo.comment += f' times manual adjustment ({times_total})'
         for key in matching_parents_master:
             thermo.comment += f', matching parent {key}: {matching_parents_master[key]}'
+        for sitelabel in parents_master:
+            thermo.comment += f', site ({sitelabel}) has parents: {parents_master[sitelabel]}'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
@@ -1817,7 +1820,7 @@ class ThermoDatabase(object):
         if node is None:
             # no data, so try the next surface site
             print(f'nonenode for {atom}')
-            return plus_sum, times_product
+            return plus_sum, times_product, matching_parents
         # now we know what node, so we can get the parents 
         # the label for these will match with keys in 
         parents = []
@@ -1843,7 +1846,7 @@ class ThermoDatabase(object):
                 matching_parents[nodename] += f'times {amount} '
         print(f'plus_sum={plus_sum}, times_product={times_product} for {atom}')
         print(f'parents={parents}')
-        return plus_sum, times_product, matching_parents
+        return plus_sum, times_product, matching_parents, parents
 
     def _add_adsorption_correction(self, adsorption_thermo, adsorption_groups, molecule, surface_sites):
         """Add thermo adsorption correction(s) to estimate adsorbate thermo from gas phase.
