@@ -1807,23 +1807,24 @@ class ThermoDatabase(object):
         plus_sum = 0
         times_product = 1
         matching_parents = {}
-
+        parents = []
         adsorption_groups = self.groups['adsorptionPt111']
         labeled_atoms = {'*': atom}
         node = adsorption_groups.descend_tree(molecule, labeled_atoms) # descends pt111
+        
         if node is None: 
             # no match, so try the next surface site
             print(f'nonenode for {atom}')
-            return plus_sum, times_product, matching_parents
+            return plus_sum, times_product, matching_parents, parents
         while node is not None and node.data is None:
             node = node.parent
         if node is None:
             # no data, so try the next surface site
             print(f'nonenode for {atom}')
-            return plus_sum, times_product, matching_parents
+            return plus_sum, times_product, matching_parents, parents
         # now we know what node, so we can get the parents 
         # the label for these will match with keys in 
-        parents = []
+        
         current = node.parent  # start from the parent
         while current is not None:
             parents.append(current.label)
