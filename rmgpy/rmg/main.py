@@ -720,7 +720,7 @@ class RMG(util.Subject):
         # DON'T generate any more reactions for the seed species at this time
         for seed_mechanism in self.seed_mechanisms:
             self.reaction_model.recalc = self.recalc
-            if self.recalc:
+            if self.restart:
                 self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
 
         if self.recalc_yaml:
@@ -880,6 +880,7 @@ class RMG(util.Subject):
                 reaction_system.attach(SimulationProfileWriter(self.output_directory, index, self.reaction_model.core.species))
                 reaction_system.attach(SimulationProfilePlotter(self.output_directory, index, self.reaction_model.core.species))
 
+
     def execute(self, initialize=True, **kwargs):
         """
         Execute an RMG job using the command-line arguments `args` as returned
@@ -996,6 +997,36 @@ class RMG(util.Subject):
         max_num_spcs_hit = False  # default
         end_early = False
 
+        #try writing a full recalc to the folder first
+        def generate_cant_files(label):
+            # generate Cantera files chem.yaml & chem_annotated.yaml in a designated `cantera` output folder
+            try:
+                # see if chemkin folder exists 
+                chemkin_path = os.path.join(self.output_directory, f"chemkin{label}")
+                if not os.path.exists(chemkin_path):
+                    os.makedirs(chemkin_path)
+                    print("Created chemkin output directory for Cantera file generation.")
+                if any([s.contains_surface_site() for s in self.reaction_model.core.species]):
+                    self.generate_cantera_files(
+                        os.path.join(chemkin_path, "chem-gas.inp"),
+                        surface_file=(os.path.join(chemkin_path, "chem-surface.inp")),
+                    )
+                    self.generate_cantera_files(
+                        os.path.join(chemkin_path, "chem_annotated-gas.inp"),
+                        surface_file=(os.path.join(chemkin_path, "chem_annotated-surface.inp")),
+                    )
+                else:  # gas phase only
+                    self.generate_cantera_files(os.path.join(chemkin_path, "chem.inp"))
+                    self.generate_cantera_files(os.path.join(chemkin_path, "chem_annotated.inp"))
+            except EnvironmentError:
+                logging.exception("Could not generate Cantera files due to EnvironmentError. Check read\\write privileges in output directory.")
+            except Exception:
+                logging.exception("Could not generate Cantera files for some reason.")
+
+
+        if self.recalc:
+            generate_cant_files(label="_full")
+
         for q, model_settings in enumerate(self.model_settings_list):
             if len(self.simulator_settings_list) > 1:
                 simulator_settings = self.simulator_settings_list[q]
@@ -1006,9 +1037,9 @@ class RMG(util.Subject):
 
             logging.info(f"Beginning model generation stage {q + 1} of {len(self.model_settings_list)}.\n")
 
-            self.done = False
-            if self.recalc:
-                self.done = True
+            self.done = self.recalc
+            not_str = "Not d" if self.done else "D"
+            print(f"{not_str}oing reaction generation since recalc is {self.recalc}")
 
             # Main RMG loop
             while not self.done:
@@ -1432,7 +1463,6 @@ class RMG(util.Subject):
             logging.exception("Could not generate Cantera files due to EnvironmentError. Check read\\write privileges in output directory.")
         except Exception:
             logging.exception("Could not generate Cantera files for some reason.")
-
         self.check_model()
         # Write output file
 

@@ -1754,6 +1754,7 @@ class CoreEdgeReactionModel:
         logging.info("Adding {0:d} reactions from seed mechanism {1} to model core...".format(len(rxns), seed_mech))
 
         for rxn in rxns:
+            listreactions = rxn
             if self.recalc:
                 if recalc_yaml == None:
                     reacts = rxn.reactants
