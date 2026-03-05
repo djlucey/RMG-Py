@@ -258,6 +258,7 @@ class RMG(util.Subject):
         self.restart = False
         self.recalc = False
         self.recalc_yaml = None
+        self.recalc_simprune = False
         self.core_seed_path = None
         self.edge_seed_path = None
         self.filters_path = None
@@ -726,6 +727,7 @@ class RMG(util.Subject):
         if self.recalc_yaml:
             self.reaction_model.recalc = self.recalc
             self.reaction_model.recalc_yaml = self.recalc_yaml
+            self.reaction_model.recalc_simprune = self.recalc_simprune
             self.reaction_model.add_seed_mechanism_to_core(self.recalc_dict, react=False, requires_rms=requires_rms, recalc_yaml=self.recalc_yaml)
 
         # Reaction libraries: add species and reactions from reaction library to the edge so
@@ -1024,7 +1026,7 @@ class RMG(util.Subject):
                 logging.exception("Could not generate Cantera files for some reason.")
 
 
-        if self.recalc:
+        if self.recalc_simprune: # only write the full if we are also pruning
             generate_cant_files(label="_full")
 
         for q, model_settings in enumerate(self.model_settings_list):
@@ -1037,9 +1039,9 @@ class RMG(util.Subject):
 
             logging.info(f"Beginning model generation stage {q + 1} of {len(self.model_settings_list)}.\n")
 
-            self.done = self.recalc
+            self.done = self.recalc and not self.recalc_simprune  # if we're just recalculating but not pruning, then we can skip the generation step since the model won't change and we're just recalculating the existing model. If we're pruning, we need to go through the generation step since pruning changes the model which changes what reactions meet the threshold for recalculation.
             not_str = "Not d" if self.done else "D"
-            print(f"{not_str}oing reaction generation since recalc is {self.recalc}")
+            print(f"{not_str}oing reaction generation since recalc is {self.recalc} with simprune {self.recalc_simprune}")
 
             # Main RMG loop
             while not self.done:
@@ -1173,7 +1175,10 @@ class RMG(util.Subject):
                         # These should be Species or Network objects
                         logging.info("")
 
-                        objects_to_enlarge = list(set(objects_to_enlarge))
+                        if self.recalc_simprune:
+                            objects_to_enlarge = []
+                        else:
+                            objects_to_enlarge = list(set(objects_to_enlarge))
 
                         # Add objects to enlarge to the core first
                         for objectToEnlarge in objects_to_enlarge:
@@ -1273,20 +1278,24 @@ class RMG(util.Subject):
 
                         old_edge_size = len(self.reaction_model.edge.reactions)
                         old_core_size = len(self.reaction_model.core.reactions)
-                        self.reaction_model.enlarge(
-                            react_edge=True,
-                            unimolecular_react=self.unimolecular_react,
-                            bimolecular_react=self.bimolecular_react,
-                            trimolecular_react=self.trimolecular_react,
-                            requires_rms=requires_rms,
-                        )
+                        if not self.recalc_simprune:
+                            self.reaction_model.enlarge(
+                                react_edge=True,
+                                unimolecular_react=self.unimolecular_react,
+                                bimolecular_react=self.bimolecular_react,
+                                trimolecular_react=self.trimolecular_react,
+                                requires_rms=requires_rms,
+                            )
 
                         if old_edge_size != len(self.reaction_model.edge.reactions) or old_core_size != len(self.reaction_model.core.reactions):
                             reactor_done = False
 
                         if not np.isinf(self.model_settings_list[0].thermo_tol_keep_spc_in_edge):
-                            self.reaction_model.thermo_filter_down(maximum_edge_species=model_settings.maximum_edge_species, requires_rms=requires_rms)
-
+                            print("Applying thermodynamic filtering to reduce edge size...")
+                            self.reaction_model.thermo_filter_down(maximum_edge_species=model_settings.maximum_edge_species, requires_rms=requires_rms, core = self.recalc_simprune)
+                        else:
+                            print("No thermodynamic filtering applied since thermo_tol_keep_spc_in_edge is set to inf")
+                            
                         max_num_spcs_hit = len(self.reaction_model.core.species) >= model_settings.max_num_species
 
                         self.save_everything()

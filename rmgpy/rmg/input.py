@@ -290,6 +290,7 @@ def species(label, structure, reactive=True, cut=False, size_threshold=None):
                 continue
 
             rmg.initial_species.append(spec)
+            rmg.reaction_model.core.initial_species.append(spec)
             species_dict[frag_label] = spec
     else:
         try:
@@ -302,6 +303,7 @@ def species(label, structure, reactive=True, cut=False, size_threshold=None):
                                                                                                             spec.label))
 
         rmg.initial_species.append(spec)
+        rmg.reaction_model.core.initial_species.append(spec)
         species_dict[label] = spec
 
 def forbidden(label, structure):
@@ -1185,6 +1187,7 @@ def mb_sampled_reactor(temperature,
 
     for spec in initialMoleFractions:
         initialMoleFractions[spec] = float(initialMoleFractions[spec])
+        rmg.reaction_model.core.initial_species.append(spec)
 
     total_initial_moles = sum(initialMoleFractions.values())
     if total_initial_moles != 1:
@@ -1649,13 +1652,16 @@ def restart_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, spe
 
 
 
-def recalc_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, speciesMap=None):
+def recalc_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, speciesMap=None, simprune=False):
     rmg.recalc = True
+    rmg.recalc_simprune = simprune
     restart_from_seed(path, coreSeed, edgeSeed, filters, speciesMap)
-def recalc_from_yaml(yaml=None, dictionary=None):
+    
+def recalc_from_yaml(yaml=None, dictionary=None, simprune = False):
     rmg.recalc = True
     rmg.recalc_yaml = yaml
     rmg.recalc_dict = dictionary
+    rmg.recalc_simprune = simprune
 
 
 
