@@ -84,12 +84,14 @@ cdef class ReactionSystem(DASx):
     # variables that cache maximum rate (ratio) data
     cdef public np.ndarray max_edge_species_rate_ratios
     cdef public np.ndarray max_network_leak_rate_ratios
+    cdef public np.ndarray max_core_species_rate_ratios
     
     #for managing prunable edge species
     cdef public list prunable_species
     cdef public list prunable_networks
     cdef public np.ndarray prunable_species_indices
     cdef public np.ndarray prunable_network_indices
+    cdef public np.ndarray prunable_core_species_indices
     
     # sensitivity variables
     # cdef public int sensmethod

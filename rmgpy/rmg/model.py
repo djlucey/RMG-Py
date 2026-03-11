@@ -1399,7 +1399,7 @@ class CoreEdgeReactionModel:
                     "Removing species {0} from edge to meet maximum number of edge species, Gibbs " "number is {1}".format(spc, Gns[rInds[i]])
                 )
 
-                self.remove_species_from_edge(self.reaction_systems, spc, requires_rms=requires_rms, core =core)
+                self.remove_species_from_edge(self.reaction_systems, spc, requires_rms=requires_rms, core=core)
 
             # Delete any networks that became empty as a result of pruning
             if self.pressure_dependence:
@@ -1429,30 +1429,35 @@ class CoreEdgeReactionModel:
                     del self.network_dict[source]
                 self.network_list.remove(network)
 
-    def prune(self, reaction_systems, tol_keep_in_edge, tol_move_to_core, maximum_edge_species, min_species_exist_iterations_for_prune, requires_rms=False):
+    def prune(self, reaction_systems, tol_keep_in_edge, tol_move_to_core, maximum_edge_species, min_species_exist_iterations_for_prune, requires_rms=False, core = False):
         """
         Remove species from the model edge based on the simulation results from
         the list of `reaction_systems`.
         """
 
-        ineligible_species = []  # A list of the species which are not eligible for pruning, for any reason
+        ineligible_species = [] if not core else self.initial_species  # A list of the species which are not eligible for pruning, for any reason
         prunable_species = reaction_systems[0].prunable_species
+        print('prunable species', len(prunable_species))
         prunable_networks = reaction_systems[0].prunable_networks
 
         num_prunable_species = len(prunable_species)
         iteration = self.iteration_num
         # All edge species that have not existed for more than two enlarge
         # iterations are ineligible for pruning
-        for spec in prunable_species:
-            if iteration - spec.creation_iteration <= min_species_exist_iterations_for_prune:
-                ineligible_species.append(spec)
+        if not core: # if we are doing the recalc prune, then we just do all 
+            for spec in prunable_species:
+                if iteration - spec.creation_iteration <= min_species_exist_iterations_for_prune:
+                    ineligible_species.append(spec)
 
         # Get the maximum species rates (and network leak rates)
         # across all reaction systems
         max_edge_species_rate_ratios = np.zeros((num_prunable_species), float)
         for reaction_system in reaction_systems:
             for i in range(num_prunable_species):
-                rate_ratio = reaction_system.max_edge_species_rate_ratios[i]
+                if core:
+                    rate_ratio = reaction_system.max_core_species_rate_ratios[i]
+                else:
+                    rate_ratio = reaction_system.max_edge_species_rate_ratios[i]
                 if max_edge_species_rate_ratios[i] < rate_ratio:
                     max_edge_species_rate_ratios[i] = rate_ratio
 
@@ -1478,7 +1483,13 @@ class CoreEdgeReactionModel:
         prune_due_to_rate_counter = 0
         for index in indices:
             spec = prunable_species[index]
-            if spec in ineligible_species or not spec in self.edge.species:
+            print('spec', spec)
+            print('rate ratio', max_edge_species_rate_ratios[index])
+            print('prunable specs', num_prunable_species)
+            print('spec to prune', len(species_to_prune))
+
+            if spec in ineligible_species or not spec in self.edge.species and not core:
+                print('skipping,ineligible for pruning since', spec in ineligible_species, spec in self.edge.species, core)
                 continue
             # Remove the species with rates below the pruning tolerance from the model edge
             if max_edge_species_rate_ratios[index] < tol_keep_in_edge:
@@ -1498,7 +1509,8 @@ class CoreEdgeReactionModel:
                     break
             else:
                 break
-
+        
+        print(species_to_prune)
         # Actually do the pruning
         if prune_due_to_rate_counter > 0:
             logging.info(
@@ -1509,7 +1521,7 @@ class CoreEdgeReactionModel:
             for index, spec in species_to_prune[0:prune_due_to_rate_counter]:
                 logging.info("Pruning species %s", spec)
                 logging.debug("    %-56s    %10.4e", spec, max_edge_species_rate_ratios[index])
-                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms)
+                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms, core=core)
         if len(species_to_prune) - prune_due_to_rate_counter > 0:
             logging.info(
                 "Pruning %d species to obtain an edge size of %d species", len(species_to_prune) - prune_due_to_rate_counter, maximum_edge_species
@@ -1517,7 +1529,7 @@ class CoreEdgeReactionModel:
             for index, spec in species_to_prune[prune_due_to_rate_counter:]:
                 logging.info("Pruning species %s", spec)
                 logging.debug("    %-56s    %10.4e", spec, max_edge_species_rate_ratios[index])
-                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms)
+                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms, core=core)
 
         # Delete any networks that became empty as a result of pruning
         if self.pressure_dependence:

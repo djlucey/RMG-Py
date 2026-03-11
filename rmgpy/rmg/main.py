@@ -1055,13 +1055,20 @@ class RMG(util.Subject):
                 all_terminated = True
                 num_core_species = len(self.reaction_model.core.species)
 
-                prunable_species = self.reaction_model.edge.species[:]
+                if self.recalc_simprune:
+                    prunable_species = self.reaction_model.core.species[:]
+                else:
+                    prunable_species = self.reaction_model.edge.species[:]
                 prunable_networks = self.reaction_model.network_list[:]
 
                 for index, reaction_system in enumerate(self.reaction_systems):
                     reaction_system.prunable_species = prunable_species  # these lines reset pruning for a new cycle
                     reaction_system.prunable_networks = prunable_networks
-                    reaction_system.reset_max_edge_species_rate_ratios()
+                    if self.recalc_simprune:
+                        reaction_system.reset_max_edge_species_rate_ratios()
+                        reaction_system.reset_max_core_species_rate_ratios()
+                    else:
+                        reaction_system.reset_max_edge_species_rate_ratios()
 
                     for p in range(reaction_system.n_sims):
                         reactor_done = True
@@ -1310,7 +1317,7 @@ class RMG(util.Subject):
                     if max_num_spcs_hit:  # breaks the reaction_systems loop
                         break
 
-                if not self.done:  # There is something that needs exploring/enlarging
+                if not self.done or self.recalc_simprune:  # There is something that needs exploring/enlarging
                     # If we reached our termination conditions, then try to prune
                     # species from the edge
                     if all_terminated and model_settings.tol_keep_in_edge > 0.0:
@@ -1322,6 +1329,7 @@ class RMG(util.Subject):
                             model_settings.maximum_edge_species,
                             model_settings.min_species_exist_iterations_for_prune,
                             requires_rms=requires_rms,
+                            core = self.recalc_simprune,
                         )
                         # Perform garbage collection after pruning
                         collected = gc.collect()
