@@ -1018,7 +1018,7 @@ class RMG(util.Subject):
                     self.generate_cantera_files(os.path.join(chemkin_path, "chem.inp"))
                     self.generate_cantera_files(os.path.join(chemkin_path, "chem_annotated.inp"))
                 # rename cantera folder to full 
-                os.rename(os.path.join(self.output_directory, "cantera"), os.path.join(self.output_directory, f"cantera_{label}"))
+                os.rename(os.path.join(self.output_directory, "cantera"), os.path.join(self.output_directory, f"cantera{label}"))
 
             except EnvironmentError:
                 logging.exception("Could not generate Cantera files due to EnvironmentError. Check read\\write privileges in output directory.")
@@ -1382,7 +1382,7 @@ class RMG(util.Subject):
 
         self.run_model_analysis()
         if self.recalc_simprune:
-            generate_cant_files(label="full")
+            generate_cant_files(label="_full")
         
         self.save_everything()
 
