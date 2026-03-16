@@ -1004,10 +1004,7 @@ class RMG(util.Subject):
             # generate Cantera files chem.yaml & chem_annotated.yaml in a designated `cantera` output folder
             try:
                 # see if chemkin folder exists 
-                chemkin_path = os.path.join(self.output_directory, f"chemkin{label}")
-                if not os.path.exists(chemkin_path):
-                    os.makedirs(chemkin_path)
-                    print("Created chemkin output directory for Cantera file generation.")
+                chemkin_path = os.path.join(self.output_directory, f"chemkin")
                 if any([s.contains_surface_site() for s in self.reaction_model.core.species]):
                     self.generate_cantera_files(
                         os.path.join(chemkin_path, "chem-gas.inp"),
@@ -1020,14 +1017,14 @@ class RMG(util.Subject):
                 else:  # gas phase only
                     self.generate_cantera_files(os.path.join(chemkin_path, "chem.inp"))
                     self.generate_cantera_files(os.path.join(chemkin_path, "chem_annotated.inp"))
+                # rename cantera folder to full 
+                os.rename(os.path.join(self.output_directory, "cantera"), os.path.join(self.output_directory, f"cantera_{label}"))
+
             except EnvironmentError:
                 logging.exception("Could not generate Cantera files due to EnvironmentError. Check read\\write privileges in output directory.")
             except Exception:
                 logging.exception("Could not generate Cantera files for some reason.")
 
-
-        if self.recalc_simprune: # only write the full if we are also pruning
-            generate_cant_files(label="_full")
 
         for q, model_settings in enumerate(self.model_settings_list):
             if len(self.simulator_settings_list) > 1:
@@ -1384,6 +1381,10 @@ class RMG(util.Subject):
         self.is_final_save = False
 
         self.run_model_analysis()
+        if self.recalc_simprune:
+            generate_cant_files(label="full")
+        
+        self.save_everything()
 
         # generate Cantera files in designated Cantera output folders. The direct
         # writers (cantera1/, cantera2/) already wrote chem_annotated{NNNN}.yaml +
