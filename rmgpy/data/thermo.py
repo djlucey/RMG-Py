@@ -1879,7 +1879,7 @@ class ThermoDatabase(object):
                     # no data, so try the next surface site
                     continue
 
-                plus_sum, times_product = self._find_plus_and_times_adjustments(atom, molecule)
+                plus_sum, times_product, matching_parents, parents = self._find_plus_and_times_adjustments(atom, molecule)
 
                 if plus_sum != 0:
                     adsorption_thermo.comment += f' plus ({plus_sum})'
