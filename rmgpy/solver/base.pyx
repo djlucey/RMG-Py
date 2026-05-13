@@ -860,9 +860,10 @@ cdef class ReactionSystem(DASx):
             for i, index in enumerate(prunable_species_indices):
                 if max_edge_species_rate_ratios[i] < edge_species_rate_ratios[index]:
                     max_edge_species_rate_ratios[i] = edge_species_rate_ratios[index]
-            for i, index in enumerate(prunable_core_species_indices):
-                if max_core_species_rate_ratios[i] < core_species_rate_ratios[index]:
-                    max_core_species_rate_ratios[i] = core_species_rate_ratios[index]
+            if max_core_species_rate_ratios is not None:
+                for i, index in enumerate(prunable_core_species_indices):
+                    if max_core_species_rate_ratios[i] < core_species_rate_ratios[index]:
+                        max_core_species_rate_ratios[i] = core_species_rate_ratios[index]
 
             for i, index in enumerate(prunable_network_indices):
                 if max_network_leak_rate_ratios[i] < network_leak_rate_ratios[index]:
