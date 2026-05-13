@@ -1187,7 +1187,6 @@ def mb_sampled_reactor(temperature,
 
     for spec in initialMoleFractions:
         initialMoleFractions[spec] = float(initialMoleFractions[spec])
-        rmg.reaction_model.core.initial_species.append(spec)
 
     total_initial_moles = sum(initialMoleFractions.values())
     if total_initial_moles != 1:
