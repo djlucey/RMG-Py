@@ -1383,8 +1383,7 @@ class RMG(util.Subject):
         self.run_model_analysis()
         if self.recalc_simprune:
             generate_cant_files(label="_full")
-        
-        self.save_everything()
+            self.save_everything()
 
         # generate Cantera files in designated Cantera output folders. The direct
         # writers (cantera1/, cantera2/) already wrote chem_annotated{NNNN}.yaml +
