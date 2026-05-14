@@ -1006,17 +1006,17 @@ class RMG(util.Subject):
                 # see if chemkin folder exists 
                 chemkin_path = os.path.join(self.output_directory, f"chemkin")
                 if any([s.contains_surface_site() for s in self.reaction_model.core.species]):
-                    self.generate_cantera_files(
+                    self.generate_cantera_files_from_chemkin(
                         os.path.join(chemkin_path, "chem-gas.inp"),
                         surface_file=(os.path.join(chemkin_path, "chem-surface.inp")),
                     )
-                    self.generate_cantera_files(
+                    self.generate_cantera_files_from_chemkin(
                         os.path.join(chemkin_path, "chem_annotated-gas.inp"),
                         surface_file=(os.path.join(chemkin_path, "chem_annotated-surface.inp")),
                     )
                 else:  # gas phase only
-                    self.generate_cantera_files(os.path.join(chemkin_path, "chem.inp"))
-                    self.generate_cantera_files(os.path.join(chemkin_path, "chem_annotated.inp"))
+                    self.generate_cantera_files_from_chemkin(os.path.join(chemkin_path, "chem.inp"))
+                    self.generate_cantera_files_from_chemkin(os.path.join(chemkin_path, "chem_annotated.inp"))
                 # rename cantera folder to full 
                 os.rename(os.path.join(self.output_directory, "cantera"), os.path.join(self.output_directory, f"cantera{label}"))
 
