@@ -69,7 +69,7 @@ import os
 
 from rmgpy import settings
 from rmgpy.data.thermo import ThermoDatabase
-from rmgpy.thermo import ThermoData
+from rmgpy.thermo import ThermoData, Wilhoit
 from rmgpy.species import Species
 
 
@@ -209,6 +209,13 @@ def recalculate_species_thermo(species_input, recalc_config, db_path=None, input
         except Exception:
             logging.warning('Thermo estimation failed for %s; skipping.', label, exc_info=True)
             continue
+
+        # Convert ThermoData/Wilhoit to NASA so downstream species.to_cantera() works.
+        # This mirrors thermoengine.process_thermo_data and ensures P_ref=10000 Pa
+        # (hardcoded in NASA.to_cantera) is used, consistent with the cantera1 writer.
+        if isinstance(spc.thermo, (ThermoData, Wilhoit)):
+            spc.thermo = spc.thermo.to_nasa(Tmin=100.0, Tmax=5000.0, Tint=1000.0)
+
         logging.debug('Estimated thermo for %s: H298 = %.1f kJ/mol',
                       label, spc.thermo.get_enthalpy(298.0) / 1e3)
         updated.append(spc)
