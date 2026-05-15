@@ -69,6 +69,7 @@ import os
 
 from rmgpy import settings
 from rmgpy.data.thermo import ThermoDatabase
+from rmgpy.thermo import ThermoData
 from rmgpy.species import Species
 
 
