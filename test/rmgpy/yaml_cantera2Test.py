@@ -423,6 +423,8 @@ class TestCanteraWriter2:
 
         versioned_file = os.path.join(cantera_dir, 'chem_annotated0002.yaml')
         latest_file = os.path.join(cantera_dir, 'chem_annotated.yaml')
+        versioned_file = os.path.join(cantera_dir, 'chem_annotated0002.yaml')
+        latest_file = os.path.join(cantera_dir, 'chem_annotated.yaml')
 
         assert os.path.exists(versioned_file)
         assert os.path.exists(latest_file)
