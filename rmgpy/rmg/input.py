@@ -160,6 +160,8 @@ def database(
         rmg.kinetics_families = kineticsFamilies
 
     rmg.adsorption_groups = adsorptionGroups
+    #rmg.plus_adjust = plus_adjust
+    #rmg.times_adjust = times_adjust
 
 
 def catalyst_properties(bindingEnergies=None,
