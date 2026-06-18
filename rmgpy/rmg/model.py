@@ -1759,7 +1759,22 @@ class CoreEdgeReactionModel:
                 # we will have a yaml file and a species dictionary 
                 species_dict = load_species_dictionary(seed_mech)
                 gas = ct.Solution(recalc_yaml)
-                surface = ct.Interface(recalc_yaml, 'surface1')
+                # try surface1, SURF0 or bi_func_surf
+
+                surface_names = ["surface1", "SURF0", "bi_func_surf"]
+
+                for name in surface_names:
+                    try:
+                        surface = ct.Interface(recalc_yaml, name)
+                        break
+                    except Exception:
+                        pass
+                else:
+                    raise ValueError(
+                        f"Could not find any of the expected surface phases "
+                        f"{surface_names} in {recalc_yaml}"
+                    )
+
                 gas_reactions = gas.reactions()
                 surface_reactions = surface.reactions()
                 for reaction in gas_reactions + surface_reactions:
