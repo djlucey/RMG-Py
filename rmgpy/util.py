@@ -333,7 +333,7 @@ def parse_command_line_arguments(command_line_args=None):
         args.recalc = args.recalc[0]
 
     if args.recalc_yaml:
-        args.recalc_yaml = args.recalc_yaml[0]
+        args.recalc_yaml = args.recalc_yaml[:2]
         
     if args.maxiter:
         args.maxiter = args.maxiter[0]

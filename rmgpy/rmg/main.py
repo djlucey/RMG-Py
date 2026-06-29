@@ -580,6 +580,10 @@ class RMG(util.Subject):
             import rmgpy.rmg.input
             rmgpy.rmg.input.recalc_from_seed(path=kwargs["recalc"])
 
+        if kwargs.get("recalc_yaml", ""):
+            import rmgpy.rmg.input
+            rmgpy.rmg.input.recalc_from_yaml(yaml=kwargs["recalc_yaml"][0], dictionary=kwargs["recalc_yaml"][1])
+
         # Check input file
         self.check_input()
 
