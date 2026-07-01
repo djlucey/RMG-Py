@@ -1392,8 +1392,7 @@ class ThermoDatabase(object):
             try:
                 thermo0 = self.get_thermo_data_for_surface_species(species)
                 metal_to_scale_from = self.adsorption_groups.split('adsorption')[-1].replace("SIDT","",1)
-                if metal_to_scale_from != metal_to_scale_to:
-                    thermo0 = self.correct_binding_energy(thermo0, species, metal_to_scale_from=metal_to_scale_from, metal_to_scale_to=metal_to_scale_to)  # group adsorption values come from Pt111
+                thermo0 = self.correct_binding_energy(thermo0, species, metal_to_scale_from=metal_to_scale_from, metal_to_scale_to=metal_to_scale_to)  # group adsorption values come from Pt111
                 return thermo0
             except:
                 logging.error("Error attempting to get thermo for species %s with structure \n%s", 
@@ -1569,8 +1568,10 @@ class ThermoDatabase(object):
         :return: corrected thermo
         """
 
+        descend_anyways = True
+
         if metal_to_scale_from == metal_to_scale_to:
-            if not self.plus_adjust and not self.times_adjust:
+            if not self.plus_adjust and not self.times_adjust and not descend_anyways:
                 return thermo
             else:
                 metal_to_scale_to_binding_energies = self.surface['metal'].find_binding_energies(metal_to_scale_from)
@@ -1600,7 +1601,7 @@ class ThermoDatabase(object):
                 pass
 
         if all(-0.01 < v.value_si < 0.01 for v in delta_atomic_adsorption_energy.values()):
-            if not self.plus_adjust and not self.times_adjust:
+            if not self.plus_adjust and not self.times_adjust and not descend_anyways:
                 return thermo
 
         molecule = species.molecule[0]
@@ -1621,7 +1622,7 @@ class ThermoDatabase(object):
             plus_total += plus
             times_total *= times
             matching_parents_master.update(matching_parents)
-            parents_master[site.label] = parents
+            parents_master[site.id] = parents
             numbonds = len(site.bonds)
             if numbonds == 0:
                 # vanDerWaals
@@ -1669,8 +1670,8 @@ class ThermoDatabase(object):
             thermo.comment += f' times manual adjustment ({times_total})'
         for key in matching_parents_master:
             thermo.comment += f', matching parent {key}: {matching_parents_master[key]}'
-        for sitelabel in parents_master:
-            thermo.comment += f', site ({sitelabel}) has parents: {parents_master[sitelabel]}'
+        for site_id in parents_master:
+            thermo.comment += f', site ({site_id}) has parents: {parents_master[site_id]}'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
