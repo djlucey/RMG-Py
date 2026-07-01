@@ -1671,7 +1671,7 @@ class ThermoDatabase(object):
         for key in matching_parents_master:
             thermo.comment += f', matching parent {key}: {matching_parents_master[key]}'
         for site_id in parents_master:
-            thermo.comment += f', site ({site_id}) has parents: {parents_master[site_id]}'
+            thermo.comment += f', [site ({site_id}) has parents: {parents_master[site_id]}]'
         
         #surface_sites = molecule.get_surface_sites()
         #try:
