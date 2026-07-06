@@ -219,11 +219,11 @@ def add_thermo_data(thermo_data1, thermo_data2, group_additivity=False, verbose=
 
     for i in range(thermo_data1.Tdata.value_si.shape[0]):
         #thermo_data1.Cpdata.value_si[i] *= times
-        thermo_data1.Cpdata.value_si[i] += (thermo_data2.Cpdata.value_si[i] + plus)
+        thermo_data1.Cpdata.value_si[i] += thermo_data2.Cpdata.value_si[i]
     #thermo_data1.H298.value_si *= times
     thermo_data1.H298.value_si += (thermo_data2.H298.value_si + plus)
     #thermo_data1.S298.value_si *= times
-    thermo_data1.S298.value_si += (thermo_data2.S298.value_si + plus)
+    thermo_data1.S298.value_si += thermo_data2.S298.value_si
 
     test_zero = sum(abs(value) for value in
                     [thermo_data2.H298.value_si, thermo_data2.S298.value_si] + thermo_data2.Cpdata.value_si.tolist())
@@ -1826,7 +1826,7 @@ class ThermoDatabase(object):
         # now we know what node, so we can get the parents 
         # the label for these will match with keys in 
         
-        current = node.parent  # start from the parent
+        current = node  # include the matched node itself
         while current is not None:
             parents.append(current.label)
             current = current.parent
