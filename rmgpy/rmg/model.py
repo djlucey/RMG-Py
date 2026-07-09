@@ -35,7 +35,7 @@ import gc
 import itertools
 import logging
 import os
-import re
+import re as regex
 
 import numpy as np
 
@@ -302,7 +302,7 @@ class CoreEdgeReactionModel:
         pattern = r'([A-Z][a-z]?)(\d*)'
         element_count = {}
 
-        for match in re.finditer(pattern, formula):
+        for match in regex.finditer(pattern, formula):
             element = match.group(1)
             count = int(match.group(2)) if match.group(2) else 1
             element_count[element] = count
@@ -643,7 +643,7 @@ class CoreEdgeReactionModel:
                 forward.fix_barrier_height(solvent=self.solvent_name)  # also converts ArrheniusEP to Arrhenius.
             elif isinstance(forward, LibraryReaction) and forward.is_surface_reaction():
                 # do fix the library reaction barrier if this is scaled from another metal
-                if any(['Binding energy corrected by LSR' in x.thermo.comment for x in forward.reactants + forward.products]):
+                if any([x.thermo is not None and 'Binding energy corrected by LSR' in x.thermo.comment for x in forward.reactants + forward.products]):
                     forward.fix_barrier_height(solvent=self.solvent_name)
             elif forward.kinetics.solute:
                 forward.apply_solvent_correction(solvent=self.solvent_name)
@@ -1026,7 +1026,14 @@ class CoreEdgeReactionModel:
             submit(spc, self.solvent_name)
 
             if rename and spc.thermo and spc.thermo.label != "":  # check if thermo libraries have a name for it
-                if isinstance(spc.molecule[0], Fragment):
+                # During recalc: never overwrite labels that encode the original master-dictionary
+                # index (e.g. "CO2(2)").  Only apply library-name renaming to genuinely new species.
+                _skip_rename = self.recalc and bool(regex.search(r'\(\d+\)$', spc.label))
+                if _skip_rename:
+                    logging.info(
+                        "Species {0} NOT renamed during recalc to preserve master dictionary label".format(spc.label)
+                    )
+                elif isinstance(spc.molecule[0], Fragment):
                     logging.info("Species {0} NOT renamed {1} but get thermo based on thermo library".format(spc.label, spc.thermo.label))
                     spc.label = spc.smiles
                 else:
@@ -1758,6 +1765,84 @@ class CoreEdgeReactionModel:
             if self.recalc_yaml:
                 # we will have a yaml file and a species dictionary 
                 species_dict = load_species_dictionary(seed_mech)
+
+                # Pre-register all master-dictionary species into the model's
+                # formula-keyed lookup dict (self.species_dict) with their original
+                # labels and indices BEFORE any reactions are processed.
+                #
+                # Why: generate_reactions_from_libraries/families returns reactions
+                # whose species objects are freshly constructed by RMG (labels like
+                # "CO2", not "CO2(2)").  When those species pass through
+                # make_new_species, check_for_existing_species searches
+                # self.species_dict by structural isomorphism.  If it finds a
+                # pre-registered species it returns that one -- with the correct
+                # label and index -- instead of creating a new counter-numbered one.
+                #
+                # species_counter is advanced past the highest master-dict index so
+                # any truly-new library species get appended with higher indices.
+                _max_master_index = 0
+                for _spec in species_dict.values():
+                    # Parse original index from label (e.g. "CO2(2)" -> 2)
+                    _m = regex.search(r'\((\d+)\)$', _spec.label)
+                    if _m:
+                        _spec.index = int(_m.group(1))
+                        if _spec.index > _max_master_index:
+                            _max_master_index = _spec.index
+                    else:
+                        _spec.index = -1  # inert / no embedded index
+
+                    # Resonance structures needed for correct isomorphism checks
+                    _spec.generate_resonance_structures()
+
+                    # Insert into formula-keyed lookup so check_for_existing_species
+                    # can find this species by structural isomorphism.
+                    # If a structurally identical species already exists in the model
+                    # (e.g. an initial species added before this function was called),
+                    # update it in-place with the master-dictionary label and index
+                    # rather than registering a second object -- which would cause a
+                    # duplicate-species CoreError at the end of the run.
+                    _formula = _spec.molecule[0].get_formula()
+                    _existing = None
+                    if _formula in self.species_dict:
+                        for _e in self.species_dict[_formula]:
+                            if _spec.is_isomorphic(_e, strict=False):
+                                _existing = _e
+                                break
+
+                    if _existing is not None:
+                        # Update the existing species with the correct label/index
+                        # from the master dictionary; don't add a duplicate entry.
+                        if _spec.index > 0:
+                            self.index_species_dict.pop(_existing.index, None)
+                            _existing.label = _spec.label
+                            _existing.index = _spec.index
+                            self.index_species_dict[_spec.index] = _existing
+                    else:
+                        # Genuinely new species — register and queue for core addition
+                        if _formula not in self.species_dict:
+                            self.species_dict[_formula] = [_spec]
+                        else:
+                            self.species_dict[_formula].append(_spec)
+
+                        if _spec.index > 0:
+                            self.index_species_dict[_spec.index] = _spec
+
+                        if _spec not in self.new_species_list:
+                            self.new_species_list.append(_spec)
+
+                if _max_master_index > self.species_counter:
+                    self.species_counter = _max_master_index
+
+                # Generate thermo for all newly pre-registered species now,
+                # before any reactions are processed.  make_new_reaction swaps
+                # the fresh species objects from generate_reactions_from_families
+                # for these pre-registered ones, and fix_barrier_height then
+                # needs get_enthalpy_of_reaction(298) -- which requires thermo.
+                # Without this, every family reaction is skipped by the
+                # try/except below.  rename=False preserves labels like "CO2(2)".
+                for _spec in list(self.new_species_list):
+                    self.generate_thermo(_spec, rename=False)
+
                 gas = ct.Solution(recalc_yaml)
                 # try surface1, SURF0 or bi_func_surf
 
@@ -1879,7 +1964,17 @@ class CoreEdgeReactionModel:
                         r.duplicate = True
                 reactionlist = listreactions
             for rxn in reactionlist:
-                r, isNew = self.make_new_reaction(rxn, check_existing= not self.recalc)  # updates self.new_species_list and self.new_reaction_list
+                try:
+                    r, isNew = self.make_new_reaction(rxn, check_existing= not self.recalc)  # updates self.new_species_list and self.new_reaction_list
+                except Exception as e:
+                    if self.recalc and 'no thermo or statmech data available' in str(e):
+                        logging.warning(
+                            f'Skipping reaction {rxn}: a species has no thermo data. '
+                            f'This can occur when the reaction was previously from a library '
+                            f'that is no longer included. Error: {e}'
+                        )
+                        continue
+                    raise
                 for s in rxn.reactants+rxn.products:
                     if s in self.edge.species and s not in edge_species_to_move:
                         edge_species_to_move.append(s)
