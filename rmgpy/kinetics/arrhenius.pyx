@@ -429,10 +429,15 @@ cdef class ArrheniusEP(KineticsModel):
         Return an :class:`Arrhenius` instance of the kinetics model using the
         given enthalpy of reaction `dHrxn` to determine the activation energy.
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dHrxn)
+        comment = self.comment
+        comment += '\nBEP parameters: alpha={0:.3f}, E0={1:.2f} kJ/mol, dHrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.alpha.value_si, self.E0.value_si * 0.001, dHrxn * 0.001, Ea * 0.001)
         return Arrhenius(
             A=self.A,
             n=self.n,
-            Ea=(self.get_activation_energy(dHrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             T0=(1, "K"),
             Tmin=self.Tmin,
             Tmax=self.Tmax,
@@ -440,7 +445,7 @@ cdef class ArrheniusEP(KineticsModel):
             Pmax=self.Pmax,
             uncertainty=self.uncertainty,
             solute=self.solute,
-            comment=self.comment,
+            comment=comment,
         )
 
     cpdef bint is_identical_to(self, KineticsModel other_kinetics) except -2:
@@ -597,16 +602,21 @@ cdef class ArrheniusBM(KineticsModel):
         given enthalpy of reaction `dHrxn` (in J/mol, evaluated at 298 K)
         to determine the activation energy.
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dHrxn)
+        comment = self.comment
+        comment += '\nBM parameters: w0={0:.2f} kJ/mol, E0={1:.2f} kJ/mol, dHrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.w0.value_si * 0.001, self.E0.value_si * 0.001, dHrxn * 0.001, Ea * 0.001)
         return Arrhenius(
             A=self.A,
             n=self.n,
-            Ea=(self.get_activation_energy(dHrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             T0=(1, "K"),
             Tmin=self.Tmin,
             Tmax=self.Tmax,
             uncertainty=self.uncertainty,
             solute=self.solute,
-            comment=self.comment,
+            comment=comment,
         )
 
     def fit_to_reactions(self, rxns, w0=None, recipe=None, Ts=None):
@@ -1752,11 +1762,16 @@ cdef class ArrheniusChargeTransferBM(KineticsModel):
         Return an :class:`ArrheniusChargeTransfer` instance of the kinetics model using the
         given heat of reaction `dHrxn` to determine the activation energy.
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dHrxn)
+        comment = self.comment
+        comment += '\nBM parameters: w0={0:.2f} kJ/mol, E0={1:.2f} kJ/mol, dHrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.w0.value_si * 0.001, self.E0.value_si * 0.001, dHrxn * 0.001, Ea * 0.001)
         return ArrheniusChargeTransfer(
             A=self.A,
             n=self.n,
             electrons=self.electrons,
-            Ea=(self.get_activation_energy(dHrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             V0=self.V0,
             T0=(1, "K"),
             Tmin=self.Tmin,
@@ -1765,7 +1780,7 @@ cdef class ArrheniusChargeTransferBM(KineticsModel):
             Pmax=self.Pmax,
             uncertainty=self.uncertainty,
             solute=self.solute,
-            comment=self.comment,
+            comment=comment,
         )
 
     cpdef bint is_identical_to(self, KineticsModel other_kinetics) except -2:
