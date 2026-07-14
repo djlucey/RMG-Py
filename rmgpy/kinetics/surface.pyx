@@ -456,18 +456,23 @@ cdef class StickingCoefficientBEP(KineticsModel):
         """
         Return an :class:`StickingCoefficient` instance of the kinetics model using the
         given enthalpy of reaction `dHrxn` to determine the activation energy.
-        
+
         Note that despite its name it does not return a :class:`Arrhenius` object.
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dHrxn)
+        comment = self.comment
+        comment += '\nBEP parameters: alpha={0:.3f}, E0={1:.2f} kJ/mol, dHrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.alpha.value_si, self.E0.value_si * 0.001, dHrxn * 0.001, Ea * 0.001)
         return StickingCoefficient(
             A=self.A,
             n=self.n,
-            Ea=(self.get_activation_energy(dHrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             T0=(1, "K"),
             Tmin=self.Tmin,
             Tmax=self.Tmax,
             coverage_dependence=self.coverage_dependence,
-            comment=self.comment,
+            comment=comment,
         )
 
     cpdef bint is_similar_to(self, KineticsModel other_kinetics) except -2:
@@ -772,21 +777,26 @@ cdef class SurfaceArrheniusBEP(ArrheniusEP):
         """
         Return an :class:`SurfaceArrhenius` instance of the kinetics model using the
         given enthalpy of reaction `dHrxn` to determine the activation energy.
-        
+
         Note that despite its name it does not return a :class:`Arrhenius` object
-        (although :class:`SurfaceArrhenius` is a subclass of :class:`Arrhenius` 
+        (although :class:`SurfaceArrhenius` is a subclass of :class:`Arrhenius`
         so in a way, it does).
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dHrxn)
+        comment = self.comment
+        comment += '\nBEP parameters: alpha={0:.3f}, E0={1:.2f} kJ/mol, dHrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.alpha.value_si, self.E0.value_si * 0.001, dHrxn * 0.001, Ea * 0.001)
         return SurfaceArrhenius(
             A=self.A,
             n=self.n,
-            Ea=(self.get_activation_energy(dHrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             T0=(1, "K"),
             Tmin=self.Tmin,
             Tmax=self.Tmax,
             uncertainty=self.uncertainty,
             coverage_dependence=self.coverage_dependence,
-            comment=self.comment,
+            comment=comment,
         )
 
 ################################################################################
@@ -1245,11 +1255,16 @@ cdef class SurfaceChargeTransferBEP(KineticsModel):
         Return an :class:`SurfaceChargeTransfer` instance of the kinetics model using the
         given free energy of reaction `dGrxn` to determine the activation energy.
         """
+        cdef double Ea
+        Ea = self.get_activation_energy(dGrxn)
+        comment = self.comment
+        comment += '\nBEP parameters: alpha={0:.3f}, E0={1:.2f} kJ/mol, dGrxn={2:.2f} kJ/mol, Ea={3:.2f} kJ/mol'.format(
+            self.alpha.value_si, self.E0.value_si * 0.001, dGrxn * 0.001, Ea * 0.001)
         return SurfaceChargeTransfer(
             A=self.A,
             n=self.n,
             electrons=self.electrons,
-            Ea=(self.get_activation_energy(dGrxn) * 0.001, "kJ/mol"),
+            Ea=(Ea * 0.001, "kJ/mol"),
             V0=self.V0,
             T0=(1, "K"),
             Tmin=self.Tmin,
@@ -1257,7 +1272,7 @@ cdef class SurfaceChargeTransferBEP(KineticsModel):
             Pmin=self.Pmin,
             Pmax=self.Pmax,
             uncertainty=self.uncertainty,
-            comment=self.comment,
+            comment=comment,
         )
 
     cpdef bint is_identical_to(self, KineticsModel other_kinetics) except -2:
