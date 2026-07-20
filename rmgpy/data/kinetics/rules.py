@@ -366,8 +366,15 @@ class KineticsRules(Database):
                     entry = entry.parent
             
             kinetics = deepcopy(entry.data)
+            # Parameters are reported before the degeneracy multiplier is applied to A, so
+            # that the comment (and the underlying rate-rule node it describes) stays the
+            # same regardless of which specific reaction/degeneracy triggered this estimate;
+            # the degeneracy multiplier is reported separately alongside it.
+            params = format_kinetics_parameters(kinetics)
             if entry0 == entry:
                 kinetics.comment = f"Estimated from node {entry.label} in family {self.label.replace('/rules','')}."
+                if params:
+                    kinetics.comment += f"\nRate rule parameters: {params}"
                 kinetics.A.value_si *= degeneracy
                 if degeneracy > 1:
                     kinetics.comment += f"\nMultiplied by reaction path degeneracy {degeneracy}"
@@ -375,6 +382,8 @@ class KineticsRules(Database):
             else:
                 kinetics.comment = f"Matched node {entry0.label}\n"
                 kinetics.comment += f"Estimated from node {entry.label} in family {self.label.replace('/rules','')}."
+                if params:
+                    kinetics.comment += f"\nRate rule parameters: {params}"
                 kinetics.A.value_si *= degeneracy
                 if degeneracy > 1:
                     kinetics.comment += f"\nMultiplied by reaction path degeneracy {degeneracy}"
@@ -484,6 +493,10 @@ class KineticsRules(Database):
 
         kinetics.comment += ' for rate rule ' + original_leaves
         kinetics.comment += '\nEuclidian distance = {}'.format(min_norm)
+        # Parameters are reported before the degeneracy multiplier is applied to A, so that
+        # the comment describing this rate-rule estimate stays the same regardless of which
+        # specific reaction/degeneracy triggered it; the multiplier is reported separately.
+        params = format_kinetics_parameters(kinetics)
         kinetics.A.value_si *= degeneracy
         if degeneracy > 1:
             kinetics.comment += "\n"
@@ -492,7 +505,43 @@ class KineticsRules(Database):
         kinetics.comment += "\n"
         kinetics.comment += "family: {0}".format(self.label.replace('/rules', ''))
 
+        # Appended to the (already-filtered-out) family line, rather than as a
+        # new trailing line, so as not to disturb get_used_rate_estimate()'s
+        # assumption in family.py that the last remaining line after filtering
+        # is the "Estimated using ..." summary.
+        if params:
+            kinetics.comment += " | Rate rule parameters: {0}".format(params)
+
         return kinetics, (entry if 'Exact' in kinetics.comment else None)
+
+
+def format_kinetics_parameters(kinetics):
+    """
+    Return a compact string of a kinetics object's rate parameters (A, n, and
+    either alpha/E0 or Ea, whichever the model uses), suitable for appending to
+    a rate-rule kinetics comment so the resulting Arrhenius/BEP expression can
+    be recomputed without needing to look anything up in the RMG database.
+    """
+    try:
+        A = kinetics.A.value_si
+        Aunits = kinetics.A.units
+        n = kinetics.n.value_si
+    except AttributeError:
+        return ''
+    parts = ['A={0:.3e} {1}'.format(A, Aunits), 'n={0:.3f}'.format(n)]
+    alpha = getattr(kinetics, 'alpha', None)
+    E0 = getattr(kinetics, 'E0', None)
+    Ea = getattr(kinetics, 'Ea', None)
+    if alpha is not None:
+        parts.append('alpha={0:.3f}'.format(alpha.value_si))
+    if E0 is not None:
+        parts.append('E0={0:.3f} kJ/mol'.format(E0.value_si / 1000.))
+    if Ea is not None:
+        parts.append('Ea={0:.3f} kJ/mol'.format(Ea.value_si / 1000.))
+    # Curly braces (not square brackets) so this can't be confused with the
+    # square-bracket nesting that family.py's get_used_rate_estimate() parses
+    # out of "Average of [...]" comments via eval().
+    return '{{{0}}}'.format(', '.join(parts))
 
 
 def remove_identical_kinetics(k_list):
