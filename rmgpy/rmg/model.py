@@ -177,6 +177,20 @@ class ReactionModel:
         # Add the unique reactions from other to the final model
         final_model.reactions.extend(unique_reactions)
 
+        # Dropping a duplicate reaction above (because an isomorphic duplicate partner
+        # was already present) can leave the surviving reaction(s) marked `duplicate=True`
+        # with no remaining partner, e.g. when only 2 of an original 3-way duplicate group
+        # end up in the merged model. Clear the flag on any reaction whose duplicate
+        # partner(s) didn't make it into the final model, so we don't write an orphaned
+        # `duplicate: true` entry to Chemkin/Cantera output.
+        duplicate_flagged = [rxn for rxn in final_model.reactions if rxn.duplicate]
+        for rxn in duplicate_flagged:
+            has_partner = any(
+                rxn0 is not rxn and rxn0.duplicate and rxn.is_isomorphic(rxn0, either_direction=True)
+                for rxn0 in duplicate_flagged
+            )
+            if not has_partner:
+                rxn.duplicate = False
         # Return the merged model
         return final_model
 
