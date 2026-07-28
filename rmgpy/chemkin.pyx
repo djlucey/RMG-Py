@@ -656,6 +656,7 @@ def _remove_line_breaks(comments):
                                 'This reaction matched rate rule', 'family: ', 'Warning:',
                                 'Chemkin file stated explicit reverse rate:', 'Ea raised from',
                                 'Fitted to', 'Reaction library', 'Estimated from node', 'Matched node',
+                                'Rate rule parameters:', 'BM parameters:',
                                 ]
     for indicator in new_statement_indicators:
         comments = comments.replace(' ' + indicator, '\n' + indicator, 1)
