@@ -1905,6 +1905,15 @@ class CoreEdgeReactionModel:
             rxns = seed_mechanism.get_library_reactions()
         logging.info("Adding {0:d} reactions from seed mechanism {1} to model core...".format(len(rxns), seed_mech))
 
+        # During recalc, seed/yaml mechanisms list each duplicate-kinetics entry as its
+        # own row sharing the same reactants/products. Regenerating reactions from
+        # scratch (library/family lookup) is a pure function of (reactants, products),
+        # so re-running it once per duplicate row just reproduces (and re-adds) the same
+        # full duplicate group again. Track which (reactants, products) groups have
+        # already been generated so we only do it once per group, while still adding
+        # every reaction (including true duplicates) that comes out of that single call.
+        processed_reaction_groups = set()
+
         for rxn in rxns:
             listreactions = rxn
             if self.recalc:
@@ -1927,7 +1936,19 @@ class CoreEdgeReactionModel:
                     logging.warning(f'Skipping reaction with empty reactants or products. Reactants: {reacts}, Products: {prods}')
                     logging.warning('This may occur when species from the YAML file are not found in the species dictionary.')
                     continue
-                
+
+                reaction_group_key = (
+                    tuple(sorted(spec.label for spec in reacts)),
+                    tuple(sorted(spec.label for spec in prods)),
+                )
+                if reaction_group_key in processed_reaction_groups:
+                    logging.info(
+                        'Reactants:{0}, products:{1} already generated as part of a duplicate '
+                        'group; skipping redundant regeneration.'.format(reacts, prods)
+                    )
+                    continue
+                processed_reaction_groups.add(reaction_group_key)
+
                 logging.info('reactants:{0}, products:{1}'.format(reacts, prods))
 
 
