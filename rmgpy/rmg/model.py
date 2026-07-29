@@ -1956,8 +1956,6 @@ class CoreEdgeReactionModel:
                 logging.info(f'{len(reactions)} reactions found from libraries for reaction {rxn}')
 
                 if reactions == []:
-                    logging.info('No library reactions tagged with elementary_high_p found for reaction, generating '
-                                'reactions from RMG families')
                     familyrxn = list(database.kinetics.generate_reactions_from_families(reactants=reacts, products=prods))
                     
                     logging.info(f'{len(familyrxn)} reactions generated from RMG families for reaction {rxn}')
