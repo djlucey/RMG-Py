@@ -160,8 +160,6 @@ def database(
         rmg.kinetics_families = kineticsFamilies
 
     rmg.adsorption_groups = adsorptionGroups
-    #rmg.plus_adjust = plus_adjust
-    #rmg.times_adjust = times_adjust
 
 
 def catalyst_properties(bindingEnergies=None,
@@ -238,24 +236,8 @@ def convert_binding_energies(binding_energies):
             raise
     return new_dict
 
-def adjustment(nodes, change, operation='times'):
-    """this function takes in a list of names of nodes to adjust and adds to a master dictionary"""
-    for node in nodes:
-        if operation == 'times':
-            current_adjustments = rmg.times_adjust.get(node)
-            if current_adjustments is None:
-                rmg.times_adjust[node] = change
-            else:
-                rmg.times_adjust[node] *= change
-        elif operation == 'plus':
-            current_adjustments = rmg.plus_adjust.get(node)
-            if current_adjustments is None:
-                rmg.plus_adjust[node] = change
-            else:
-                rmg.plus_adjust[node] += change
-    
 
-def adjustment(nodes, change, operation='times'):
+def adjustment(nodes, change, operation='plus'):
     """this function takes in a list of names of nodes to adjust and adds to a master dictionary"""
     for node in nodes:
         if operation == 'times':
