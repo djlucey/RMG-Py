@@ -1813,15 +1813,15 @@ class ThermoDatabase(object):
         labeled_atoms = {'*': atom}
         node = adsorption_groups.descend_tree(molecule, labeled_atoms) # descends pt111
         
-        if node is None: 
+        if node is None:
             # no match, so try the next surface site
-            print(f'nonenode for {atom}')
+            # print(f'nonenode for {atom}')
             return plus_sum, times_product, matching_parents, parents
         while node is not None and node.data is None:
             node = node.parent
         if node is None:
             # no data, so try the next surface site
-            print(f'nonenode for {atom}')
+            # print(f'nonenode for {atom}')
             return plus_sum, times_product, matching_parents, parents
         # now we know what node, so we can get the parents 
         # the label for these will match with keys in 
@@ -1846,8 +1846,8 @@ class ThermoDatabase(object):
                 if nodename not in matching_parents:
                     matching_parents[nodename] = ''
                 matching_parents[nodename] += f'times {amount} '
-        print(f'plus_sum={plus_sum}, times_product={times_product} for {atom}')
-        print(f'parents={parents}')
+        # print(f'plus_sum={plus_sum}, times_product={times_product} for {atom}')
+        # print(f'parents={parents}')
         return plus_sum, times_product, matching_parents, parents
 
     def _add_adsorption_correction(self, adsorption_thermo, adsorption_groups, molecule, surface_sites):

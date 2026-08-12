@@ -1413,7 +1413,7 @@ class CoreEdgeReactionModel:
                     num_to_remove -= 1
                 ind += 1
             
-            print('removing', len(remove_spcs), 'species thermofilt')
+            # print('removing', len(remove_spcs), 'species thermofilt')
 
             logging.debug("Found %d eligible species for filtering", len(remove_spcs))
 
@@ -1460,7 +1460,7 @@ class CoreEdgeReactionModel:
 
         ineligible_species = [] if not core else self.initial_species  # A list of the species which are not eligible for pruning, for any reason
         prunable_species = reaction_systems[0].prunable_species
-        print('prunable species', len(prunable_species))
+        # print('prunable species', len(prunable_species))
         prunable_networks = reaction_systems[0].prunable_networks
 
         num_prunable_species = len(prunable_species)
@@ -1506,13 +1506,13 @@ class CoreEdgeReactionModel:
         prune_due_to_rate_counter = 0
         for index in indices:
             spec = prunable_species[index]
-            print('spec', spec)
-            print('rate ratio', max_edge_species_rate_ratios[index])
-            print('prunable specs', num_prunable_species)
-            print('spec to prune', len(species_to_prune))
+            # print('spec', spec)
+            # print('rate ratio', max_edge_species_rate_ratios[index])
+            # print('prunable specs', num_prunable_species)
+            # print('spec to prune', len(species_to_prune))
 
             if spec in ineligible_species or not spec in self.edge.species and not core:
-                print('skipping,ineligible for pruning since', spec in ineligible_species, spec in self.edge.species, core)
+                # print('skipping,ineligible for pruning since', spec in ineligible_species, spec in self.edge.species, core)
                 continue
             # Remove the species with rates below the pruning tolerance from the model edge
             if max_edge_species_rate_ratios[index] < tol_keep_in_edge:
@@ -1533,7 +1533,7 @@ class CoreEdgeReactionModel:
             else:
                 break
         
-        print(species_to_prune)
+        # print(species_to_prune)
         # Actually do the pruning
         if prune_due_to_rate_counter > 0:
             logging.info(
@@ -1949,16 +1949,16 @@ class CoreEdgeReactionModel:
                     continue
                 processed_reaction_groups.add(reaction_group_key)
 
-                logging.info('reactants:{0}, products:{1}'.format(reacts, prods))
+                # logging.info('reactants:{0}, products:{1}'.format(reacts, prods))
 
 
                 reactions = database.kinetics.generate_reactions_from_libraries(reactants=reacts, products=prods)
-                logging.info(f'{len(reactions)} reactions found from libraries for reaction {rxn}')
+                # logging.info(f'{len(reactions)} reactions found from libraries for reaction {rxn}')
 
                 if reactions == []:
                     familyrxn = list(database.kinetics.generate_reactions_from_families(reactants=reacts, products=prods))
-                    
-                    logging.info(f'{len(familyrxn)} reactions generated from RMG families for reaction {rxn}')
+
+                    # logging.info(f'{len(familyrxn)} reactions generated from RMG families for reaction {rxn}')
                     for re in familyrxn:
                         for spec in re.reactants + re.products:
                             self.generate_thermo(spec)
@@ -1966,7 +1966,7 @@ class CoreEdgeReactionModel:
                         re.duplicate = dup
                     listreactions = familyrxn
                 else:
-                    logging.info(f'{len(reactions)} reactions tagged with elementary_high_p found for reaction, taking the first one')
+                    # logging.info(f'{len(reactions)} reactions tagged with elementary_high_p found for reaction, taking the first one')
                     listreactions = reactions[0] #from first library reaction only
                     listreactions.duplicate = dup
             else:
