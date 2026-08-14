@@ -66,6 +66,8 @@ from rmgpy.rmg.reactionmechanismsimulator_reactors import (
 from rmgpy.rmg.reactionmechanismsimulator_reactors import Reactor as RMSReactor
 from rmgpy.species import Species
 from rmgpy.thermo.thermoengine import submit
+import cantera as ct
+from rmgpy.chemkin import load_species_dictionary
 
 ################################################################################
 
@@ -260,6 +262,8 @@ class CoreEdgeReactionModel:
         self.new_surface_rxns_loss = set()
         self.solvent_name = ""
         self.surface_site_density = None
+        self.recalc = False
+        self.recalc_yaml = None
         self.unrealgroups = [
             Group().from_adjacency_list(
                 """
@@ -387,7 +391,7 @@ class CoreEdgeReactionModel:
 
         if generate_thermo:
             # Rename from thermo library label only if no user-provided label exists yet.
-            self.generate_thermo(spec, rename=not bool(spec.label))
+            self.generate_thermo(spec)
 
         # If the species still does not have a label, set initial label as the SMILES
         # (applies when generate_thermo is False, or when no library match was found)
@@ -623,7 +627,7 @@ class CoreEdgeReactionModel:
                 forward.fix_barrier_height(solvent=self.solvent_name)  # also converts ArrheniusEP to Arrhenius.
             elif isinstance(forward, LibraryReaction) and forward.is_surface_reaction():
                 # do fix the library reaction barrier if this is scaled from another metal
-                if any(['Binding energy corrected by LSR' in x.thermo.comment for x in forward.reactants + forward.products]):
+                if any([x.thermo is not None and 'Binding energy corrected by LSR' in x.thermo.comment for x in forward.reactants + forward.products]):
                     forward.fix_barrier_height(solvent=self.solvent_name)
             elif forward.kinetics.solute:
                 forward.apply_solvent_correction(solvent=self.solvent_name)
@@ -1670,10 +1674,11 @@ class CoreEdgeReactionModel:
                     stoichiometry[i, j] = nu
         return stoichiometry.tocsr()
 
-    def add_seed_mechanism_to_core(self, seed_mechanism, react=False, requires_rms=False):
+    def add_seed_mechanism_to_core(self, seed_mech, react=False, requires_rms=False, recalc_yaml = None):
         """
         Add all species and reactions from `seed_mechanism`, a
-        :class:`KineticsPrimaryDatabase` object, to the model core. If `react`
+        :class:`KineticsPrimaryDatabase` object, to the model core. If `recalc_yaml` is ``True``, 
+        then new species and reactions will be generated that match the YAML file. If `react`
         is ``True``, then reactions will also be generated between the seed
         species. For large seed mechanisms this can be prohibitively expensive,
         so it is not done by default.
@@ -1696,85 +1701,205 @@ class CoreEdgeReactionModel:
         num_old_core_species = len(self.core.species)
         num_old_core_reactions = len(self.core.reactions)
 
-        logging.info("Adding seed mechanism {0} to model core...".format(seed_mechanism))
+        rxns  = []
+        if recalc_yaml == None:
+            seed_mechanism = database.kinetics.libraries[seed_mech]
+        if self.recalc:
+            if self.recalc_yaml:
+                # we will have a yaml file and a species dictionary 
+                species_dict = load_species_dictionary(seed_mech)
 
-        seed_mechanism = database.kinetics.libraries[seed_mechanism]
+                gas = ct.Solution(recalc_yaml)
+                # try surface1, SURF0 or bi_func_surf
 
-        rxns = seed_mechanism.get_library_reactions()
+                surface_names = ["surface1", "SURF0", "bi_func_surf"]
 
-        for rxn in rxns:
-            if (
-                isinstance(rxn, LibraryReaction) and not (rxn.library in library_names) and not (rxn.library == "kineticsjobs")
-            ):  # if one of the reactions in the library is from another library load that library
-                database.kinetics.library_order.append((rxn.library, "Internal"))
-                database.kinetics.load_libraries(path=path, libraries=[rxn.library])
-                library_names = list(database.kinetics.libraries.keys())
-            if isinstance(rxn, TemplateReaction) and not (rxn.family in family_names):
-                logging.warning("loading reaction {0} originally from family {1} as a library reaction".format(str(rxn), rxn.family))
-                rxn = LibraryReaction(
-                    reactants=rxn.reactants[:],
-                    products=rxn.products[:],
-                    library=seed_mechanism.name,
-                    specific_collider=rxn.specific_collider,
-                    kinetics=rxn.kinetics,
-                    duplicate=rxn.duplicate,
-                    reversible=rxn.reversible,
-                )
-            r, isNew = self.make_new_reaction(rxn)  # updates self.new_species_list and self.new_reaction_list
-            for s in rxn.reactants+rxn.products:
-                if s in self.edge.species and s not in edge_species_to_move:
-                    edge_species_to_move.append(s)
-            if getattr(r.kinetics, "coverage_dependence", None):
-                self.process_coverage_dependence(r.kinetics)
-            if not isNew:
-                logging.info("This library reaction was not new: {0}".format(rxn))
-            elif (
-                self.pressure_dependence
-                and rxn.elementary_high_p
-                and rxn.is_unimolecular()
-                and isinstance(rxn, LibraryReaction)
-                and isinstance(rxn.kinetics, Arrhenius)
-                and (
-                    self.pressure_dependence.maximum_atoms is None
-                    or self.pressure_dependence.maximum_atoms >= sum([len(spec.molecule[0].atoms) for spec in r.reactants])
-                )
-            ):
-                # This unimolecular library reaction is flagged as `elementary_high_p` and has Arrhenius type kinetics.
-                # We should calculate a pressure-dependent rate for it
-                if len(rxn.reactants) == 1:
-                    self.process_new_reactions(new_reactions=[rxn], new_species=rxn.reactants[0], requires_rms=requires_rms)
+                for name in surface_names:
+                    try:
+                        surface = ct.Interface(recalc_yaml, name)
+                        break
+                    except Exception:
+                        pass
                 else:
-                    self.process_new_reactions(new_reactions=[rxn], new_species=rxn.products[0], requires_rms=requires_rms)
+                    raise ValueError(
+                        f"Could not find any of the expected surface phases "
+                        f"{surface_names} in {recalc_yaml}"
+                    )
+
+                gas_reactions = gas.reactions()
+                surface_reactions = surface.reactions()
+                for reaction in gas_reactions + surface_reactions:
+                    newlist = [[],[], reaction.duplicate]
+                    missing_species = []
+                    for label in reaction.reactants:
+                        amt = reaction.reactants[label]
+                        if label in species_dict:
+                            spec = species_dict[label]
+                            for _ in range(int(amt)):
+                                newlist[0].append(spec.copy(deep=True))
+                        else:
+                            missing_species.append(label)
+                    for label in reaction.products:
+                        if label in species_dict:
+                            spec = species_dict[label]
+                            amt = reaction.products[label]
+                            for _ in range(int(amt)):
+                                newlist[1].append(spec.copy(deep=True))
+                        else:
+                            missing_species.append(label)
+                    if missing_species:
+                        logging.warning(f'Reaction {reaction} skipped: species {missing_species} not found in species dictionary')
+                    rxns.append(newlist)
+            else:
+                database.kinetics.libraries.pop(seed_mech)
+                database.kinetics.library_order = [lib for lib in database.kinetics.library_order if lib[0] != seed_mech]
+        if recalc_yaml == None:
+            rxns = seed_mechanism.get_library_reactions()
+        logging.info("Adding {0:d} reactions from seed mechanism {1} to model core...".format(len(rxns), seed_mech))
+
+        # Only want one reaction group (reactants + products) to be processed
+        # this method will find the duplicates when it is recalculating, so we do nto need to start with multiple
+        processed_reaction_groups = set()
+        for rxn in rxns:
+            listreactions = rxn
+            if self.recalc:
+                if recalc_yaml == None:
+                    reacts = rxn.reactants
+                    prods = rxn.products
+                    dup = rxn.duplicate
+                else:
+                    reacts = rxn[0]
+                    prods = rxn[1]
+                    dup = rxn[2]
+
+                # logging.info(f'estimating rate of reaction  using RMG-database')
+
+                if not all([spec != None for spec in reacts + prods]):
+                    raise ValueError('chemical structures of reactants and products not available for RMG estimation of '
+                                    'reaction')
+                
+                if len(reacts) == 0 or len(prods) == 0:
+                    logging.warning(f'Skipping reaction with empty reactants or products. Reactants: {reacts}, Products: {prods}')
+                    logging.warning('This may occur when species from the YAML file are not found in the species dictionary.')
+                    continue
+
+                reaction_group_key = (
+                    tuple(sorted(spec.label for spec in reacts)),
+                    tuple(sorted(spec.label for spec in prods)),
+                )
+                if reaction_group_key in processed_reaction_groups:
+                    logging.info(
+                        'Reactants:{0}, products:{1} already generated as part of a duplicate '
+                        'group; skipping redundant regeneration.'.format(reacts, prods)
+                    )
+                    continue
+                processed_reaction_groups.add(reaction_group_key)
+                reactions = database.kinetics.generate_reactions_from_libraries(reactants=reacts, products=prods)
+                if reactions == []:
+                    familyrxn = list(database.kinetics.generate_reactions_from_families(reactants=reacts, products=prods))
+
+                    # logging.info(f'{len(familyrxn)} reactions generated from RMG families for reaction {rxn}')
+                    for rex in familyrxn:
+                        for spec in rex.reactants + rex.products:
+                            self.generate_thermo(spec)
+                        self.apply_kinetics_to_reaction(rex)
+                        rex.duplicate = dup
+                    listreactions = familyrxn
+                else:
+                    listreactions = reactions[0] #from first library reaction only
+                    listreactions.duplicate = dup
+            else:
+                if (
+                    isinstance(rxn, LibraryReaction) and not (rxn.library in library_names) and not (rxn.library == "kineticsjobs")
+                ):  # if one of the reactions in the library is from another library load that library
+                    database.kinetics.library_order.append((rxn.library, "Internal"))
+                    database.kinetics.load_libraries(path=path, libraries=[rxn.library])
+                    library_names = list(database.kinetics.libraries.keys())
+                if isinstance(rxn, TemplateReaction) and not (rxn.family in family_names):
+                    logging.warning("loading reaction {0} originally from family {1} as a library reaction".format(str(rxn), rxn.family))
+                    listreactions = LibraryReaction(
+                        reactants=rxn.reactants[:],
+                        products=rxn.products[:],
+                        library=seed_mechanism.name,
+                        specific_collider=rxn.specific_collider,
+                        kinetics=rxn.kinetics,
+                        duplicate=rxn.duplicate,
+                        reversible=rxn.reversible,
+                    )
+            #check if rxn is a list or not
+            if not isinstance(listreactions, list):
+                reactionlist = [listreactions]
+            else:
+                if len(listreactions) > 1:
+                    # mark them as duplicates
+                    for r in listreactions:
+                        r.duplicate = True
+                reactionlist = listreactions
+            for rxn in reactionlist:
+                try:
+                    r, isNew = self.make_new_reaction(rxn, check_existing= not self.recalc)  # updates self.new_species_list and self.new_reaction_list
+                except Exception as e:
+                    if self.recalc and 'no thermo or statmech data available' in str(e):
+                        logging.warning(
+                            f'Skipping reaction {rxn}: a species has no thermo data. '
+                            f'This can occur when the reaction was previously from a library '
+                            f'that is no longer included. Error: {e}'
+                        )
+                        continue
+                    raise
+                for s in rxn.reactants+rxn.products:
+                    if s in self.edge.species and s not in edge_species_to_move:
+                        edge_species_to_move.append(s)
+                if getattr(r.kinetics, "coverage_dependence", None):
+                    self.process_coverage_dependence(r.kinetics)
+                if not isNew:
+                    logging.info("This library reaction was not new: {0}".format(rxn))
+                elif (
+                    self.pressure_dependence
+                    and rxn.elementary_high_p
+                    and rxn.is_unimolecular()
+                    and isinstance(rxn, LibraryReaction)
+                    and isinstance(rxn.kinetics, Arrhenius)
+                    and (
+                        self.pressure_dependence.maximum_atoms is None
+                        or self.pressure_dependence.maximum_atoms >= sum([len(spec.molecule[0].atoms) for spec in r.reactants])
+                    )
+                ):
+                    # This unimolecular library reaction is flagged as `elementary_high_p` and has Arrhenius type kinetics.
+                    # We should calculate a pressure-dependent rate for it
+                    if len(rxn.reactants) == 1:
+                        self.process_new_reactions(new_reactions=[rxn], new_species=rxn.reactants[0], requires_rms=requires_rms)
+                    else:
+                        self.process_new_reactions(new_reactions=[rxn], new_species=rxn.products[0], requires_rms=requires_rms)
 
         # Perform species constraints and forbidden species checks
-
-        for spec in self.new_species_list:
-            if database.forbidden_structures.is_molecule_forbidden(spec.molecule[0]):
-                if "allowed" in rmg.species_constraints and "seed mechanisms" in rmg.species_constraints["allowed"]:
-                    spec.explicitly_allowed = True
-                    logging.warning(
-                        "Species {0} from seed mechanism {1} is globally forbidden.  "
-                        "It will behave as an inert unless found in a seed mechanism "
-                        "or reaction library.".format(spec.label, seed_mechanism.label)
-                    )
-                else:
-                    raise ForbiddenStructureException(
-                        "Species {0} from seed mechanism {1} is globally forbidden. "
-                        "You may explicitly allow it, but it will remain inert unless "
-                        "found in a seed mechanism or reaction "
-                        "library.".format(spec.label, seed_mechanism.label)
-                    )
-            reason = fails_species_constraints(spec)
-            if reason:
-                if "allowed" in rmg.species_constraints and "seed mechanisms" in rmg.species_constraints["allowed"]:
-                    rmg.species_constraints["explicitlyAllowedMolecules"].extend(spec.molecule)
-                else:
-                    raise ForbiddenStructureException(
-                        "Species constraints forbids species {0} from seed mechanism {1}."
-                        " Please reformulate constraints, remove the species, or"
-                        " explicitly allow it. Reason: {2}".format(spec.label, seed_mechanism.label, reason)
-                    )
-
+        if self.recalc_yaml is None:
+            for spec in self.new_species_list:
+                if database.forbidden_structures.is_molecule_forbidden(spec.molecule[0]):
+                    if "allowed" in rmg.species_constraints and "seed mechanisms" in rmg.species_constraints["allowed"]:
+                        spec.explicitly_allowed = True
+                        logging.warning(
+                            "Species {0} from seed mechanism {1} is globally forbidden.  "
+                            "It will behave as an inert unless found in a seed mechanism "
+                            "or reaction library.".format(spec.label, seed_mechanism.label)
+                        )
+                    else:
+                        raise ForbiddenStructureException(
+                            "Species {0} from seed mechanism {1} is globally forbidden. "
+                            "You may explicitly allow it, but it will remain inert unless "
+                            "found in a seed mechanism or reaction "
+                            "library.".format(spec.label, seed_mechanism.label)
+                        )
+                reason = fails_species_constraints(spec)
+                if reason:
+                    if "allowed" in rmg.species_constraints and "seed mechanisms" in rmg.species_constraints["allowed"]:
+                        rmg.species_constraints["explicitlyAllowedMolecules"].extend(spec.molecule)
+                    else:
+                            raise ForbiddenStructureException(
+                            "Species constraints forbids species {0} from seed mechanism {1}."
+                            " Please reformulate constraints, remove the species, or"
+                            " explicitly allow it. Reason: {2}".format(spec.label, seed_mechanism.label, reason)
+                        )
         for spec in edge_species_to_move+self.new_species_list:
             if spec.reactive:
                 submit(spec, self.solvent_name)
@@ -1796,8 +1921,8 @@ class CoreEdgeReactionModel:
             self.add_reaction_to_core(rxn, requires_rms=requires_rms)
 
         # Check we didn't introduce unmarked duplicates
-        self.mark_chemkin_duplicates()
-
+        if not self.recalc:
+            self.mark_chemkin_duplicates()
         self.log_enlarge_summary(
             new_core_species=self.core.species[num_old_core_species:],
             new_core_reactions=self.core.reactions[num_old_core_reactions:],
@@ -1851,7 +1976,7 @@ class CoreEdgeReactionModel:
                     duplicate=rxn.duplicate,
                     reversible=rxn.reversible,
                 )
-            r, isNew = self.make_new_reaction(rxn)  # updates self.new_species_list and self.new_reaction_list
+            r, isNew = self.make_new_reaction(rxn, check_existing=not self.recalc)  # updates self.new_species_list and self.new_reaction_list
             if r is not None and getattr(rxn.kinetics, "coverage_dependence", None):
                 self.process_coverage_dependence(r.kinetics)
             if not isNew:

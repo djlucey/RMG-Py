@@ -719,12 +719,21 @@ class RMG(util.Subject):
         # Seed mechanisms: add species and reactions from seed mechanism
         # DON'T generate any more reactions for the seed species at this time
         for seed_mechanism in self.seed_mechanisms:
-            self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
+            self.reaction_model.recalc = self.recalc
+            if self.restart:
+                self.reaction_model.add_seed_mechanism_to_core(seed_mechanism, react=False, requires_rms=requires_rms)
+
+        if self.recalc_yaml:
+            self.reaction_model.recalc = self.recalc
+            self.reaction_model.recalc_yaml = self.recalc_yaml
+            self.reaction_model.recalc_simprune = self.recalc_simprune
+            self.reaction_model.add_seed_mechanism_to_core(self.recalc_dict, react=False, requires_rms=requires_rms, recalc_yaml=self.recalc_yaml)
 
         # Reaction libraries: add species and reactions from reaction library to the edge so
         # that RMG can find them if their rates are large enough
         for library, option in self.reaction_libraries:
-            self.reaction_model.add_reaction_library_to_edge(library, requires_rms=requires_rms)
+            if not self.recalc:
+                self.reaction_model.add_reaction_library_to_edge(library, requires_rms=requires_rms)
 
         # Also always add in a few bath gases (since RMG-Java does)
         for label, smiles in [("Ar", "[Ar]"), ("He", "[He]"), ("Ne", "[Ne]"), ("N2", "N#N")]:
@@ -901,6 +910,13 @@ class RMG(util.Subject):
 
         logging.info("Initialization complete. Starting model generation.\n")
 
+        if self.recalc:
+            logging.info("Recalculating.\n")
+            # do not filter reactions and do not enlarge edge since we're just recalculating the existing model
+            self.filter_reactions = False
+            self.enlarge_edge = False
+            self.generate_seed_each_iteration = False
+
         # Initiate first reaction discovery step after adding all core species
         for index, reaction_system in enumerate(self.reaction_systems):
             # Initialize memory object to track conditions for ranged reactors
@@ -949,13 +965,15 @@ class RMG(util.Subject):
                 logging.info("Generating initial reactions...")
 
             # React core species to enlarge edge
-            self.reaction_model.enlarge(
-                react_edge=True,
-                unimolecular_react=self.unimolecular_react,
-                bimolecular_react=self.bimolecular_react,
-                trimolecular_react=self.trimolecular_react,
-                requires_rms=requires_rms,
-            )
+            edge_react = True
+            if not self.recalc:
+                self.reaction_model.enlarge(
+                    react_edge=edge_react,
+                    unimolecular_react=self.unimolecular_react,
+                    bimolecular_react=self.bimolecular_react,
+                    trimolecular_react=self.trimolecular_react,
+                    requires_rms=requires_rms,
+                )
 
         if not np.isinf(self.model_settings_list[0].thermo_tol_keep_spc_in_edge):
             self.reaction_model.set_thermodynamic_filtering_parameters(
@@ -989,7 +1007,9 @@ class RMG(util.Subject):
 
             logging.info(f"Beginning model generation stage {q + 1} of {len(self.model_settings_list)}.\n")
 
-            self.done = False
+            self.done = self.recalc  # if we're just recalculating but not pruning, then we can skip the generation step since the model won't change and we're just recalculating the existing model. If we're pruning, we need to go through the generation step since pruning changes the model which changes what reactions meet the threshold for recalculation.
+            not_str = "Not d" if self.done else "D"
+            print(f"{not_str}oing reaction generation since recalc is {self.recalc} with simprune {self.recalc_simprune}")
 
             # Main RMG loop
             while not self.done:
