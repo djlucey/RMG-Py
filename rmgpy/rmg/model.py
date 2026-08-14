@@ -1926,7 +1926,7 @@ class CoreEdgeReactionModel:
                     prods = rxn[1]
                     dup = rxn[2]
 
-                logging.info(f'estimating rate of reaction  using RMG-database')
+                # logging.info(f'estimating rate of reaction  using RMG-database')
 
                 if not all([spec != None for spec in reacts + prods]):
                     raise ValueError('chemical structures of reactants and products not available for RMG estimation of '

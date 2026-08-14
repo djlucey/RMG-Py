@@ -467,7 +467,7 @@ and immediately used in input files without any additional changes.
         """
         reaction_list = []
         for label, library_type in self.library_order:
-            logging.info(f"Searching in library {label}...")
+            # logging.info(f"Searching in library {label}...")
             # Generate reactions from reaction libraries (no need to generate them from seeds)
             if library_type == "Reaction Library":
                 reaction_list.extend(self.generate_reactions_from_library(self.libraries[label],
