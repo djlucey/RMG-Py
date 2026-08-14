@@ -236,7 +236,7 @@ class KineticsDatabase(object):
                 raise
             self.families[label] = family
 
-    def load_libraries(self, path, libraries=None):
+    def load_libraries(self, path, libraries=None, recalc = None):
         """
         Load the listed kinetics libraries from the given `path` on disk.
         
@@ -267,7 +267,8 @@ class KineticsDatabase(object):
         else:
             # load all the libraries you can find
             # this cannot be activated in a normal RMG job. Only activated when loading the database for other purposes
-            self.library_order = []
+            if not recalc:
+                self.library_order = []
             for (root, dirs, files) in os.walk(os.path.join(path)):
                 for f in files:
                     if f.lower() == 'reactions.py':
@@ -491,7 +492,7 @@ and immediately used in input files without any additional changes.
                     reversible=entry.item.reversible,
                     duplicate=entry.item.duplicate,
                     kinetics=deepcopy(entry.data),
-                    library=library,
+                    library=library.label,
                     entry=entry,
                 )
                 reaction_list.append(reaction)
