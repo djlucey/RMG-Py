@@ -1629,6 +1629,17 @@ def restart_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, spe
                              'mechanism: {0}. See the RMG documentation at {1} for more information'.format(path_errors,
                                                                                                             doc_link))
 
+def recalc_from_seed(path=None, coreSeed=None, edgeSeed=None, filters=None, speciesMap=None, simprune=False):
+    rmg.recalc = True
+    rmg.recalc_simprune = simprune
+    restart_from_seed(path, coreSeed, edgeSeed, filters, speciesMap)
+    
+def recalc_from_yaml(yaml=None, dictionary=None, simprune = False):
+    rmg.recalc = True
+    rmg.recalc_yaml = yaml
+    rmg.recalc_dict = dictionary
+    rmg.recalc_simprune = simprune
+
 def liquid_volumetric_mass_transfer_coefficient_power_law(prefactor=(0,"1/s"), diffusionCoefficientPower=0, solventViscosityPower=0, solventDensityPower=0):
 
     rmg.liquid_volumetric_mass_transfer_coefficient_power_law = liquidVolumetricMassTransferCoefficientPowerLaw(prefactor=Quantity(prefactor).value_si,
@@ -1712,6 +1723,8 @@ def read_input_file(path, rmg0):
         'thermoCentralDatabase': thermo_central_database,
         'uncertainty': uncertainty,
         'restartFromSeed': restart_from_seed,
+        'recalcFromSeed': recalc_from_seed,
+        'recalcFromYaml': recalc_from_yaml,
     }
 
     thermo_libraries = rmg0.thermo_libraries if isinstance(rmg0.thermo_libraries, list) else None

@@ -256,10 +256,14 @@ class RMG(util.Subject):
         self.initialization_time = 0
         self.kinetics_datastore = None
         self.restart = False
+        self.recalc = False
+        self.recalc_yaml = None
+        self.recalc_simprune = False
         self.core_seed_path = None
         self.edge_seed_path = None
         self.filters_path = None
         self.species_map_path = None
+        self.recalc_dict = None
 
         self.name = "Seed"
         self.generate_seed_each_iteration = True
@@ -445,6 +449,7 @@ class RMG(util.Subject):
             adsorption_groups=Pt111_adsorption, # use Pt111 groups for training reactions
             # frequenciesLibraries = self.statmech_libraries,
             depository=False,  # Don't bother loading the depository information, as we don't use it
+            recalc=self.recalc,
         )
 
         # Turn off reversibility for families with three products if desired
@@ -565,6 +570,14 @@ class RMG(util.Subject):
             import rmgpy.rmg.input
 
             rmgpy.rmg.input.restart_from_seed(path=kwargs["restart"])
+
+        if kwargs.get("recalc", ""):
+            import rmgpy.rmg.input
+            rmgpy.rmg.input.recalc_from_seed(path=kwargs["recalc"])
+
+        if kwargs.get("recalc_yaml", ""):
+            import rmgpy.rmg.input
+            rmgpy.rmg.input.recalc_from_yaml(yaml=kwargs["recalc_yaml"][0], dictionary=kwargs["recalc_yaml"][1])
 
         # Check input file
         self.check_input()

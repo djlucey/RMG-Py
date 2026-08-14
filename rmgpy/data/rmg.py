@@ -84,7 +84,8 @@ class RMGDatabase(object):
              depository=True,
              solvation=True,
              surface=True,  # on by default, because solvation is also on by default
-             testing=False):
+             testing=False,
+             recalc=None):
         """
         Load the RMG database from the given `path` on disk, where `path`
         points to the top-level folder of the RMG database. If none of the
@@ -101,7 +102,8 @@ class RMGDatabase(object):
                            reaction_libraries,
                            seed_mechanisms,
                            kinetics_families,
-                           kinetics_depositories
+                           kinetics_depositories, 
+                           recalc
                            )
         if not testing:
             self.load_statmech(os.path.join(path, 'statmech'), statmech_libraries, depository)
@@ -147,8 +149,8 @@ class RMGDatabase(object):
                       reaction_libraries=None,
                       seed_mechanisms=None,
                       kinetics_families=None,
-                      kinetics_depositories=None
-                      ):
+                      kinetics_depositories=None,
+                      recalc=None):
         """
         Load the RMG kinetics database from the given `path` on disk, where
         `path` points to the top-level folder of the RMG kinetics database.
