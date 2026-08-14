@@ -394,7 +394,7 @@ class CoreEdgeReactionModel:
 
         if generate_thermo:
             # Rename from thermo library label only if no user-provided label exists yet.
-            self.generate_thermo(spec)
+            self.generate_thermo(spec, rename=not bool(spec.label))
 
         # If the species still does not have a label, set initial label as the SMILES
         # (applies when generate_thermo is False, or when no library match was found)
@@ -1013,7 +1013,14 @@ class CoreEdgeReactionModel:
             submit(spc, self.solvent_name)
 
             if rename and spc.thermo and spc.thermo.label != "":  # check if thermo libraries have a name for it
-                if isinstance(spc.molecule[0], Fragment):
+                # During recalc: never overwrite labels that encode the original master-dictionary
+                # index (e.g. "CO2(2)").  Only apply library-name renaming to genuinely new species.
+                _skip_rename = self.recalc and bool(re.search(r'\(\d+\)$', spc.label))
+                if _skip_rename:
+                    logging.info(
+                        "Species {0} NOT renamed during recalc to preserve master dictionary label".format(spc.label)
+                    )
+                elif isinstance(spc.molecule[0], Fragment):
                     logging.info("Species {0} NOT renamed {1} but get thermo based on thermo library".format(spc.label, spc.thermo.label))
                     spc.label = spc.smiles
                 else:
@@ -1734,6 +1741,56 @@ class CoreEdgeReactionModel:
             if self.recalc_yaml:
                 # we will have a yaml file and a species dictionary 
                 species_dict = load_species_dictionary(seed_mech)
+
+                # Add species passed in to start so the names will be the same as in the original dict
+                _max_master_index = 0
+                for _spec in species_dict.values():
+                    # Parse original index from label (e.g. "CO2(2)" -> 2)
+                    _m = re.search(r'\((\d+)\)$', _spec.label)
+                    if _m:
+                        _spec.index = int(_m.group(1))
+                        if _spec.index > _max_master_index:
+                            _max_master_index = _spec.index
+                    else:
+                        _spec.index = -1  # inert / no embedded index
+
+                    # Resonance structures needed for correct isomorphism checks
+                    _spec.generate_resonance_structures()
+
+                    _formula = _spec.molecule[0].get_formula()
+                    _existing = None
+                    if _formula in self.species_dict:
+                        for _e in self.species_dict[_formula]:
+                            if _spec.is_isomorphic(_e, strict=False):
+                                _existing = _e
+                                break
+
+                    if _existing is not None:
+                        # Update the existing species with the correct label/index
+                        # from the master dictionary; don't add a duplicate entry.
+                        if _spec.index > 0:
+                            self.index_species_dict.pop(_existing.index, None)
+                            _existing.label = _spec.label
+                            _existing.index = _spec.index
+                            self.index_species_dict[_spec.index] = _existing
+                    else:
+                        # Genuinely new species — register and queue for core addition
+                        if _formula not in self.species_dict:
+                            self.species_dict[_formula] = [_spec]
+                        else:
+                            self.species_dict[_formula].append(_spec)
+
+                        if _spec.index > 0:
+                            self.index_species_dict[_spec.index] = _spec
+
+                        if _spec not in self.new_species_list:
+                            self.new_species_list.append(_spec)
+
+                if _max_master_index > self.species_counter:
+                    self.species_counter = _max_master_index
+
+                for _spec in list(self.new_species_list):
+                    self.generate_thermo(_spec, rename=False)
 
                 gas = ct.Solution(recalc_yaml)
                 # try surface1, SURF0 or bi_func_surf
