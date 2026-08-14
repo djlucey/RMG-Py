@@ -272,6 +272,7 @@ def species(label, structure, reactive=True, cut=False, size_threshold=None):
                 continue
 
             rmg.initial_species.append(spec)
+            rmg.reaction_model.core.initial_species.append(spec)
             species_dict[frag_label] = spec
     else:
         try:
@@ -284,6 +285,7 @@ def species(label, structure, reactive=True, cut=False, size_threshold=None):
                                                                                                             spec.label))
 
         rmg.initial_species.append(spec)
+        rmg.reaction_model.core.initial_species.append(spec)
         species_dict[label] = spec
 
 def forbidden(label, structure):

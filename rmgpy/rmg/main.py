@@ -1007,7 +1007,7 @@ class RMG(util.Subject):
 
             logging.info(f"Beginning model generation stage {q + 1} of {len(self.model_settings_list)}.\n")
 
-            self.done = self.recalc  # if we're just recalculating but not pruning, then we can skip the generation step since the model won't change and we're just recalculating the existing model. If we're pruning, we need to go through the generation step since pruning changes the model which changes what reactions meet the threshold for recalculation.
+            self.done = self.recalc and not self.recalc_simprune  # if we're just recalculating but not pruning, then we can skip the generation step since the model won't change and we're just recalculating the existing model. If we're pruning, we need to go through the generation step since pruning changes the model which changes what reactions meet the threshold for recalculation.
             not_str = "Not d" if self.done else "D"
             print(f"{not_str}oing reaction generation since recalc is {self.recalc} with simprune {self.recalc_simprune}")
 
@@ -1023,13 +1023,20 @@ class RMG(util.Subject):
                 all_terminated = True
                 num_core_species = len(self.reaction_model.core.species)
 
-                prunable_species = self.reaction_model.edge.species[:]
+                if self.recalc_simprune:
+                    prunable_species = self.reaction_model.core.species[:]
+                else:
+                    prunable_species = self.reaction_model.edge.species[:]
                 prunable_networks = self.reaction_model.network_list[:]
 
                 for index, reaction_system in enumerate(self.reaction_systems):
                     reaction_system.prunable_species = prunable_species  # these lines reset pruning for a new cycle
                     reaction_system.prunable_networks = prunable_networks
-                    reaction_system.reset_max_edge_species_rate_ratios()
+                    if self.recalc_simprune:
+                        reaction_system.reset_max_edge_species_rate_ratios()
+                        reaction_system.reset_max_core_species_rate_ratios()
+                    else:
+                        reaction_system.reset_max_edge_species_rate_ratios()
 
                     for p in range(reaction_system.n_sims):
                         reactor_done = True
@@ -1143,7 +1150,10 @@ class RMG(util.Subject):
                         # These should be Species or Network objects
                         logging.info("")
 
-                        objects_to_enlarge = list(set(objects_to_enlarge))
+                        if self.recalc_simprune:
+                            objects_to_enlarge = []
+                        else:
+                            objects_to_enlarge = list(set(objects_to_enlarge))
 
                         # Add objects to enlarge to the core first
                         for objectToEnlarge in objects_to_enlarge:
@@ -1243,20 +1253,24 @@ class RMG(util.Subject):
 
                         old_edge_size = len(self.reaction_model.edge.reactions)
                         old_core_size = len(self.reaction_model.core.reactions)
-                        self.reaction_model.enlarge(
-                            react_edge=True,
-                            unimolecular_react=self.unimolecular_react,
-                            bimolecular_react=self.bimolecular_react,
-                            trimolecular_react=self.trimolecular_react,
-                            requires_rms=requires_rms,
-                        )
+                        if not self.recalc_simprune:
+                            self.reaction_model.enlarge(
+                                react_edge=True,
+                                unimolecular_react=self.unimolecular_react,
+                                bimolecular_react=self.bimolecular_react,
+                                trimolecular_react=self.trimolecular_react,
+                                requires_rms=requires_rms,
+                            )
 
                         if old_edge_size != len(self.reaction_model.edge.reactions) or old_core_size != len(self.reaction_model.core.reactions):
                             reactor_done = False
 
                         if not np.isinf(self.model_settings_list[0].thermo_tol_keep_spc_in_edge):
-                            self.reaction_model.thermo_filter_down(maximum_edge_species=model_settings.maximum_edge_species, requires_rms=requires_rms)
-
+                            print("Applying thermodynamic filtering to reduce edge size...")
+                            self.reaction_model.thermo_filter_down(maximum_edge_species=model_settings.maximum_edge_species, requires_rms=requires_rms, core = self.recalc_simprune)
+                        else:
+                            print("No thermodynamic filtering applied since thermo_tol_keep_spc_in_edge is set to inf")
+                            
                         max_num_spcs_hit = len(self.reaction_model.core.species) >= model_settings.max_num_species
 
                         self.save_everything()
@@ -1271,7 +1285,7 @@ class RMG(util.Subject):
                     if max_num_spcs_hit:  # breaks the reaction_systems loop
                         break
 
-                if not self.done:  # There is something that needs exploring/enlarging
+                if not self.done or self.recalc_simprune:  # There is something that needs exploring/enlarging
                     # If we reached our termination conditions, then try to prune
                     # species from the edge
                     if all_terminated and model_settings.tol_keep_in_edge > 0.0:
@@ -1283,6 +1297,7 @@ class RMG(util.Subject):
                             model_settings.maximum_edge_species,
                             model_settings.min_species_exist_iterations_for_prune,
                             requires_rms=requires_rms,
+                            core = self.recalc_simprune,
                         )
                         # Perform garbage collection after pruning
                         collected = gc.collect()
@@ -1337,6 +1352,8 @@ class RMG(util.Subject):
         self.is_final_save = False
 
         self.run_model_analysis()
+        if self.recalc_simprune:
+            self.save_everything()
 
         # generate Cantera files in designated Cantera output folders. The direct
         # writers (cantera1/, cantera2/) already wrote chem_annotated{NNNN}.yaml +

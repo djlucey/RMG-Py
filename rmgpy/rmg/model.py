@@ -80,6 +80,7 @@ class ReactionModel:
 
     def __init__(self, species=None, reactions=None, phases=None, interfaces={}):
         self.species = species or []
+        self.initial_species = []
         self.reactions = reactions or []
         if phases is None:
             phases = {"Default": Phase(), "Surface": Phase()}
@@ -134,6 +135,7 @@ class ReactionModel:
                     break
             else:
                 unique_reactions.append(rxn)
+
 
         # Add the unique species from other to the final model
         final_model.species.extend(unique_species)
@@ -262,6 +264,7 @@ class CoreEdgeReactionModel:
         self.new_surface_rxns_loss = set()
         self.solvent_name = ""
         self.surface_site_density = None
+        self.initial_species = self.core.initial_species
         self.recalc = False
         self.recalc_yaml = None
         self.unrealgroups = [
@@ -1327,24 +1330,28 @@ class CoreEdgeReactionModel:
         if self.pressure_dependence:
             self.remove_empty_pdep_networks()
 
-    def thermo_filter_down(self, maximum_edge_species, min_species_exist_iterations_for_prune=0, requires_rms=False):
+    def thermo_filter_down(self, maximum_edge_species, min_species_exist_iterations_for_prune=0, requires_rms=False, core=False):
         """
         removes species from the edge based on their Gibbs energy until maximum_edge_species
         is reached under the constraint that all removed species are older than
         min_species_exist_iterations_for_prune iterations
         maximum_edge_species is the maximum allowed number of edge species
         min_species_exist_iterations_for_prune is the number of iterations a species must be in the edge
-        before it is eligible for thermo filtering
+        before it is eligible for thermo filtering. If core is True, then the core species are filtered instead of the 
+        edge species and this is only used for a recalculation where thermo might be different from original mech generated.
         """
         Tmax = self.Tmax
-        num_to_remove = len(self.edge.species) - maximum_edge_species
+        removals = len(self.edge.species) if not core else len(self.core.species)
+        num_to_remove = removals - maximum_edge_species
         logging.debug("Planning to remove %d species", num_to_remove)
         iteration = self.iteration_num
 
         if num_to_remove > 0:  # implies flux pruning is off or did not trigger
             logging.info("Reached maximum number of edge species")
             logging.info("Attempting to remove excess edge species with Thermodynamic filtering")
-            spcs = self.edge.species
+            if core:
+                logging.info("Thermodynamic filtering will be applied to the core species")
+            spcs = self.edge.species if not core else self.core.species
             Gfs = np.array([spc.thermo.get_free_energy(Tmax) for spc in spcs])
             Gns = (Gfs - self.Gmax) / (self.Gmax - self.Gmin)
             inds = np.argsort(Gns)  # could actually do this with the Gfs, but want to print the Gn value later
@@ -1352,11 +1359,16 @@ class CoreEdgeReactionModel:
 
             ind = 0
             remove_spcs = []
+            protected_species = self.initial_species
 
             rInds = []
             while ind < len(inds) and num_to_remove > 0:  # find the species we can remove and collect indices for removal
                 i = inds[ind]
                 spc = spcs[i]
+                if spc in protected_species:
+                    logging.info("Skipping protected species {0} (required by reactor)".format(spc))
+                    ind += 1
+                    continue
                 if iteration - spc.creation_iteration >= min_species_exist_iterations_for_prune:
                     remove_spcs.append(spc)
                     rInds.append(i)
@@ -1369,7 +1381,7 @@ class CoreEdgeReactionModel:
                 logging.info(
                     "Removing species {0} from edge to meet maximum number of edge species, Gibbs " "number is {1}".format(spc, Gns[rInds[i]])
                 )
-                self.remove_species_from_edge(self.reaction_systems, spc, requires_rms=requires_rms)
+                self.remove_species_from_edge(self.reaction_systems, spc, requires_rms=requires_rms, core=core)
 
             # Delete any networks that became empty as a result of pruning
             if self.pressure_dependence:
@@ -1399,30 +1411,35 @@ class CoreEdgeReactionModel:
                     del self.network_dict[source]
                 self.network_list.remove(network)
 
-    def prune(self, reaction_systems, tol_keep_in_edge, tol_move_to_core, maximum_edge_species, min_species_exist_iterations_for_prune, requires_rms=False):
+    def prune(self, reaction_systems, tol_keep_in_edge, tol_move_to_core, maximum_edge_species, min_species_exist_iterations_for_prune, requires_rms=False, core = False):
         """
         Remove species from the model edge based on the simulation results from
-        the list of `reaction_systems`.
+        the list of `reaction_systems`. If `core` is True, then the core species are pruned 
         """
 
-        ineligible_species = []  # A list of the species which are not eligible for pruning, for any reason
+        ineligible_species = [] if not core else self.initial_species  # A list of the species which are not eligible for pruning, for any reason
         prunable_species = reaction_systems[0].prunable_species
+        # print('prunable species', len(prunable_species))
         prunable_networks = reaction_systems[0].prunable_networks
 
         num_prunable_species = len(prunable_species)
         iteration = self.iteration_num
         # All edge species that have not existed for more than two enlarge
         # iterations are ineligible for pruning
-        for spec in prunable_species:
-            if iteration - spec.creation_iteration <= min_species_exist_iterations_for_prune:
-                ineligible_species.append(spec)
+        if not core: # if we are doing the recalc prune, then we just do all 
+            for spec in prunable_species:
+                if iteration - spec.creation_iteration <= min_species_exist_iterations_for_prune:
+                    ineligible_species.append(spec)
 
         # Get the maximum species rates (and network leak rates)
         # across all reaction systems
         max_edge_species_rate_ratios = np.zeros((num_prunable_species), float)
         for reaction_system in reaction_systems:
             for i in range(num_prunable_species):
-                rate_ratio = reaction_system.max_edge_species_rate_ratios[i]
+                if core:
+                    rate_ratio = reaction_system.max_core_species_rate_ratios[i]
+                else:
+                    rate_ratio = reaction_system.max_edge_species_rate_ratios[i]
                 if max_edge_species_rate_ratios[i] < rate_ratio:
                     max_edge_species_rate_ratios[i] = rate_ratio
 
@@ -1448,7 +1465,8 @@ class CoreEdgeReactionModel:
         prune_due_to_rate_counter = 0
         for index in indices:
             spec = prunable_species[index]
-            if spec in ineligible_species or not spec in self.edge.species:
+            if spec in ineligible_species or not spec in self.edge.species and not core:
+                # print('skipping,ineligible for pruning since', spec in ineligible_species, spec in self.edge.species, core)
                 continue
             # Remove the species with rates below the pruning tolerance from the model edge
             if max_edge_species_rate_ratios[index] < tol_keep_in_edge:
@@ -1479,7 +1497,7 @@ class CoreEdgeReactionModel:
             for index, spec in species_to_prune[0:prune_due_to_rate_counter]:
                 logging.info("Pruning species %s", spec)
                 logging.debug("    %-56s    %10.4e", spec, max_edge_species_rate_ratios[index])
-                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms)
+                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms, core=core)
         if len(species_to_prune) - prune_due_to_rate_counter > 0:
             logging.info(
                 "Pruning %d species to obtain an edge size of %d species", len(species_to_prune) - prune_due_to_rate_counter, maximum_edge_species
@@ -1487,7 +1505,7 @@ class CoreEdgeReactionModel:
             for index, spec in species_to_prune[prune_due_to_rate_counter:]:
                 logging.info("Pruning species %s", spec)
                 logging.debug("    %-56s    %10.4e", spec, max_edge_species_rate_ratios[index])
-                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms)
+                self.remove_species_from_edge(reaction_systems, spec, requires_rms=requires_rms, core=core)
 
         # Delete any networks that became empty as a result of pruning
         if self.pressure_dependence:
@@ -1495,22 +1513,29 @@ class CoreEdgeReactionModel:
 
         logging.info("")
 
-    def remove_species_from_edge(self, reaction_systems, spec, requires_rms=False):
+    def remove_species_from_edge(self, reaction_systems, spec, requires_rms=False, core = False):
         """
-        Remove species `spec` from the reaction model edge.
+        Remove species `spec` from the reaction model edge (or core).
         """
 
         # remove the species
-        self.edge.species.remove(spec)
-        self.index_species_dict.pop(spec.index)
+        if core:
+            self.core.species.remove(spec)
+        else:
+            self.edge.species.remove(spec)
+        self.index_species_dict.pop(spec.index, None)
         if requires_rms:
-            self.edge.phase_system.remove_species(spec)
+            if core:
+                self.core.phase_system.remove_species(spec)
+            else:
+                self.edge.phase_system.remove_species(spec)
 
         # clean up species references in reaction_systems
         for reaction_system in reaction_systems:
             if not requires_rms or not isinstance(reaction_system, RMSReactor):
                 try:
-                    reaction_system.species_index.pop(spec)
+                    if spec in reaction_system.species_index:
+                        reaction_system.species_index.pop(spec)
                 except KeyError:
                     pass
 
@@ -1525,12 +1550,13 @@ class CoreEdgeReactionModel:
 
         # identify any reactions it's involved in
         rxn_list = []
-        for rxn in self.edge.reactions:
+        rxns_to_go_through = self.core.reactions if core else self.edge.reactions
+        for rxn in rxns_to_go_through:
             if spec in rxn.reactants or spec in rxn.products:
                 rxn_list.append(rxn)
         # remove those reactions
         for rxn in rxn_list:
-            self.edge.reactions.remove(rxn)
+            rxns_to_go_through.remove(rxn)
 
         # Remove the species from any unirxn networks it is in
         if self.pressure_dependence:

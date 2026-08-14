@@ -146,12 +146,14 @@ cdef class ReactionSystem(DASx):
         # variables that cache maximum rate (ratio) data
         self.max_edge_species_rate_ratios = None
         self.max_network_leak_rate_ratios = None
+        self.max_core_species_rate_ratios = None
 
         #for managing prunable edge species
         self.prunable_species = []
         self.prunable_networks = []
         self.prunable_species_indices = None
         self.prunable_network_indices = None
+        self.prunable_core_species_indices = None
 
         # sensitivity variables
         self.sensmethod = 2  # sensmethod = 1 for staggered corrector sensitivities, 0 (simultaneous corrector), 2 (staggered direct)
@@ -264,6 +266,7 @@ cdef class ReactionSystem(DASx):
                                                                    surface_reactions)
 
         self.set_prunable_indices(edge_species, pdep_networks)
+        self.set_prunable_core_species_indices(core_species)
 
     def initialize_solver(self):
         DASx.initialize(self, self.t0, self.y0, self.dydt0, self.senpar, self.atol_array, self.rtol_array)
@@ -275,6 +278,14 @@ cdef class ReactionSystem(DASx):
         every initialization
         """
         self.max_edge_species_rate_ratios = np.zeros((len(self.prunable_species)), float)
+
+    def reset_max_core_species_rate_ratios(self):
+        """
+        This function sets max_core_species_rate_ratios back to zero
+        for pruning of ranged reactors it is important to avoid doing this
+        every initialization
+        """
+        self.max_core_species_rate_ratios = np.zeros((len(self.prunable_species)), float)
 
     def set_prunable_indices(self, edge_species, pdep_networks):
         cdef object spc
@@ -296,6 +307,18 @@ cdef class ReactionSystem(DASx):
                 self.max_network_leak_rate_ratios[i] = np.inf  #avoid pruning of lost networks
 
         self.prunable_network_indices = np.array(temp)
+
+    def set_prunable_core_species_indices(self, core_species):
+        cdef object spc
+        cdef list temp
+        temp = []
+        for i, spc in enumerate(core_species):
+            try:
+                temp.append(core_species.index(spc))
+            except ValueError:
+                continue
+
+        self.prunable_core_species_indices = np.array(temp)
 
     @cython.boundscheck(False)
     cpdef initialize_surface(self, list core_species, list core_reactions, list surface_species, list surface_reactions):
@@ -599,6 +622,7 @@ cdef class ReactionSystem(DASx):
         cdef np.ndarray[np.float64_t, ndim=1] core_species_rates, edge_species_rates, network_leak_rates
         cdef np.ndarray[np.float64_t, ndim=1] core_species_production_rates, core_species_consumption_rates, total_div_accum_nums
         cdef np.ndarray[np.float64_t, ndim=1] max_edge_species_rate_ratios, max_network_leak_rate_ratios
+        cdef np.ndarray[np.float64_t, ndim=1] max_core_species_rate_ratios
         cdef bint terminated
         cdef object max_species, max_network
         cdef int i, j, k
@@ -675,6 +699,7 @@ cdef class ReactionSystem(DASx):
 
         prunable_species_indices = self.prunable_species_indices
         prunable_network_indices = self.prunable_network_indices
+        prunable_core_species_indices = self.prunable_core_species_indices
 
         surface_species_indices = self.surface_species_indices
         surface_reaction_indices = self.surface_reaction_indices
@@ -700,6 +725,8 @@ cdef class ReactionSystem(DASx):
 
         max_edge_species_rate_ratios = self.max_edge_species_rate_ratios
         max_network_leak_rate_ratios = self.max_network_leak_rate_ratios
+        max_core_species_rate_ratios = self.max_core_species_rate_ratios
+
         forward_rate_coefficients = self.kf
         unimolecular_threshold = self.unimolecular_threshold
         bimolecular_threshold = self.bimolecular_threshold
@@ -833,6 +860,11 @@ cdef class ReactionSystem(DASx):
             for i, index in enumerate(prunable_species_indices):
                 if max_edge_species_rate_ratios[i] < edge_species_rate_ratios[index]:
                     max_edge_species_rate_ratios[i] = edge_species_rate_ratios[index]
+            if max_core_species_rate_ratios is not None:
+                for i, index in enumerate(prunable_core_species_indices):
+                    if max_core_species_rate_ratios[i] < core_species_rate_ratios[index]:
+                        max_core_species_rate_ratios[i] = core_species_rate_ratios[index]
+
             for i, index in enumerate(prunable_network_indices):
                 if max_network_leak_rate_ratios[i] < network_leak_rate_ratios[index]:
                     max_network_leak_rate_ratios[i] = network_leak_rate_ratios[index]
@@ -1279,6 +1311,7 @@ cdef class ReactionSystem(DASx):
 
         self.max_edge_species_rate_ratios = max_edge_species_rate_ratios
         self.max_network_leak_rate_ratios = max_network_leak_rate_ratios
+        self.max_core_species_rate_ratios = max_core_species_rate_ratios
 
         self.unimolecular_threshold = unimolecular_threshold
         self.bimolecular_threshold = bimolecular_threshold
