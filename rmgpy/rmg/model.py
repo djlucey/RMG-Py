@@ -1965,6 +1965,12 @@ class CoreEdgeReactionModel:
                         self.apply_kinetics_to_reaction(re)
                         re.duplicate = dup
                     listreactions = familyrxn
+                    if not familyrxn:
+                        logging.warning(
+                            f'Could not match reaction with reactants {reacts} and products {prods} '
+                            f'to any library or family reaction; skipping.'
+                        )
+                        continue
                 else:
                     # logging.info(f'{len(reactions)} reactions tagged with elementary_high_p found for reaction, taking the first one')
                     listreactions = reactions[0] #from first library reaction only
