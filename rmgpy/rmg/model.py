@@ -294,6 +294,9 @@ class CoreEdgeReactionModel:
         self.initial_species = self.core.initial_species
         self.recalc = False
         self.recalc_yaml = None
+        # ids of species pre-registered from the recalc master dictionary, whose
+        # labels must not be overwritten by thermo-library renaming
+        self.recalc_preserved_species = set()
         self.unrealgroups = [
             Group().from_adjacency_list(
                 """
@@ -1042,7 +1045,7 @@ class CoreEdgeReactionModel:
             if rename and spc.thermo and spc.thermo.label != "":  # check if thermo libraries have a name for it
                 # During recalc: never overwrite labels that encode the original master-dictionary
                 # index (e.g. "CO2(2)").  Only apply library-name renaming to genuinely new species.
-                _skip_rename = self.recalc and bool(regex.search(r'\(\d+\)$', spc.label))
+                _skip_rename = self.recalc and id(spc) in self.recalc_preserved_species
                 if _skip_rename:
                     logging.info(
                         "Species {0} NOT renamed during recalc to preserve master dictionary label".format(spc.label)
@@ -1797,13 +1800,18 @@ class CoreEdgeReactionModel:
                 _max_master_index = 0
                 for _spec in species_dict.values():
                     # Parse original index from label (e.g. "CO2(2)" -> 2)
+                    # The index must be stripped out of the label: the Chemkin
+                    # writer re-appends it (get_species_identifier formats
+                    # "{label}({index})"), so keeping it would emit "CO2(2)(2)".
                     _m = regex.search(r'\((\d+)\)$', _spec.label)
                     if _m:
                         _spec.index = int(_m.group(1))
+                        _spec.label = _spec.label[:_m.start()]
                         if _spec.index > _max_master_index:
                             _max_master_index = _spec.index
                     else:
                         _spec.index = -1  # inert / no embedded index
+                    self.recalc_preserved_species.add(id(_spec))
 
                     # Resonance structures needed for correct isomorphism checks
                     _spec.generate_resonance_structures()
@@ -1831,6 +1839,7 @@ class CoreEdgeReactionModel:
                             _existing.label = _spec.label
                             _existing.index = _spec.index
                             self.index_species_dict[_spec.index] = _existing
+                            self.recalc_preserved_species.add(id(_existing))
                     else:
                         # Genuinely new species — register and queue for core addition
                         if _formula not in self.species_dict:
