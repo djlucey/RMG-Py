@@ -48,7 +48,7 @@ from rmgpy.data.kinetics.library import KineticsLibrary, LibraryReaction
 from rmgpy.data.rmg import get_db
 from rmgpy.data.vaporLiquidMassTransfer import vapor_liquid_mass_transfer
 from rmgpy.display import display
-from rmgpy.exceptions import ForbiddenStructureException
+from rmgpy.exceptions import ForbiddenStructureException, KineticsError
 from rmgpy.kinetics import Arrhenius, KineticsData
 from rmgpy.kinetics.surface import StickingCoefficient
 from rmgpy.molecule.fragment import Fragment
@@ -1956,7 +1956,14 @@ class CoreEdgeReactionModel:
                 # logging.info(f'{len(reactions)} reactions found from libraries for reaction {rxn}')
 
                 if reactions == []:
-                    familyrxn = list(database.kinetics.generate_reactions_from_families(reactants=reacts, products=prods))
+                    try:
+                        familyrxn = list(database.kinetics.generate_reactions_from_families(reactants=reacts, products=prods))
+                    except KineticsError as e:
+                        logging.error(
+                            f'Could not find a matching reverse reaction for reactants {reacts} and '
+                            f'products {prods}; skipping this reaction during recalc. Error: {e}'
+                        )
+                        continue
 
                     # logging.info(f'{len(familyrxn)} reactions generated from RMG families for reaction {rxn}')
                     for re in familyrxn:
