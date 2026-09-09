@@ -41,7 +41,7 @@ import numpy as np
 
 import rmgpy.data.rmg
 from rmgpy import settings
-from rmgpy.constraints import fails_species_constraints, pass_cutting_threshold
+from rmgpy.constraints import drop_disallowed_species, fails_species_constraints, pass_cutting_threshold
 from rmgpy.data.kinetics.depository import DepositoryReaction
 from rmgpy.data.kinetics.family import KineticsFamily, TemplateReaction
 from rmgpy.data.kinetics.library import KineticsLibrary, LibraryReaction
@@ -1780,23 +1780,12 @@ class CoreEdgeReactionModel:
             seed_mechanism = database.kinetics.libraries[seed_mech]
         if self.recalc:
             if self.recalc_yaml:
-                # we will have a yaml file and a species dictionary 
+                # we will have a yaml file and a species dictionary
                 species_dict = load_species_dictionary(seed_mech)
 
-                # Pre-register all master-dictionary species into the model's
-                # formula-keyed lookup dict (self.species_dict) with their original
-                # labels and indices BEFORE any reactions are processed.
-                #
-                # Why: generate_reactions_from_libraries/families returns reactions
-                # whose species objects are freshly constructed by RMG (labels like
-                # "CO2", not "CO2(2)").  When those species pass through
-                # make_new_species, check_for_existing_species searches
-                # self.species_dict by structural isomorphism.  If it finds a
-                # pre-registered species it returns that one -- with the correct
-                # label and index -- instead of creating a new counter-numbered one.
-                #
-                # species_counter is advanced past the highest master-dict index so
-                # any truly-new library species get appended with higher indices.
+                # Drop dictionary species that violate the current species constraints
+                drop_disallowed_species(species_dict, source=f'recalc mechanism {seed_mech}')
+
                 _max_master_index = 0
                 for _spec in species_dict.values():
                     # Parse original index from label (e.g. "CO2(2)" -> 2)
@@ -1816,13 +1805,7 @@ class CoreEdgeReactionModel:
                     # Resonance structures needed for correct isomorphism checks
                     _spec.generate_resonance_structures()
 
-                    # Insert into formula-keyed lookup so check_for_existing_species
-                    # can find this species by structural isomorphism.
-                    # If a structurally identical species already exists in the model
-                    # (e.g. an initial species added before this function was called),
-                    # update it in-place with the master-dictionary label and index
-                    # rather than registering a second object -- which would cause a
-                    # duplicate-species CoreError at the end of the run.
+                    # If a structurally identical species already exists in the model, do not add another
                     _formula = _spec.molecule[0].get_formula()
                     _existing = None
                     if _formula in self.species_dict:
@@ -1856,13 +1839,6 @@ class CoreEdgeReactionModel:
                 if _max_master_index > self.species_counter:
                     self.species_counter = _max_master_index
 
-                # Generate thermo for all newly pre-registered species now,
-                # before any reactions are processed.  make_new_reaction swaps
-                # the fresh species objects from generate_reactions_from_families
-                # for these pre-registered ones, and fix_barrier_height then
-                # needs get_enthalpy_of_reaction(298) -- which requires thermo.
-                # Without this, every family reaction is skipped by the
-                # try/except below.  rename=False preserves labels like "CO2(2)".
                 for _spec in list(self.new_species_list):
                     self.generate_thermo(_spec, rename=False)
 
@@ -1905,7 +1881,10 @@ class CoreEdgeReactionModel:
                         else:
                             missing_species.append(label)
                     if missing_species:
+                        # Skip the whole reaction: keeping it would hand RMG a partial
+                        # reactant/product set and regenerate the wrong reaction.
                         logging.warning(f'Reaction {reaction} skipped: species {missing_species} not found in species dictionary')
+                        continue
                     rxns.append(newlist)
             else:
                 database.kinetics.libraries.pop(seed_mech)
