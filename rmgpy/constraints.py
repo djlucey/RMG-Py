@@ -60,6 +60,31 @@ def pass_cutting_threshold(species):
     return False
 
 
+def drop_disallowed_species(species_dict, source=''):
+    """
+    Given a label -> `Species` dictionary, delete (in place) every entry that is a
+    globally forbidden structure or that fails the user's speciesConstraints, logging
+    a warning for each. Returns the list of dropped labels.
+
+    Used by the recalc-from-yaml path, which reuses a mechanism generated under
+    possibly looser constraints and so must drop violating species rather than raise.
+    """
+    import rmgpy.data.rmg
+
+    forbidden_structures = rmgpy.data.rmg.database.forbidden_structures
+    dropped = []
+    for label, species in list(species_dict.items()):
+        reason = ('globally forbidden structure'
+                  if forbidden_structures.is_molecule_forbidden(species.molecule[0])
+                  else fails_species_constraints(species))
+        if reason:
+            logging.warning(f'Dropping species {label} from {source}: {reason}. '
+                            'Reactions involving it will be skipped.')
+            del species_dict[label]
+            dropped.append(label)
+    return dropped
+
+
 def fails_species_constraints(species):
     """
     Pass in either a `Species` or `Molecule` object and checks whether it passes 
