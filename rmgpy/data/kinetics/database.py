@@ -459,7 +459,7 @@ and immediately used in input files without any additional changes.
                                                                    only_families=only_families, resonance=resonance))
         return reaction_list
 
-    def generate_reactions_from_libraries(self, reactants, products=None):
+    def generate_reactions_from_libraries(self, reactants = None, products=None):
         """
         Find all reactions from all loaded kinetics library involving the
         provided `reactants`, which can be either :class:`Molecule` objects or
@@ -484,7 +484,13 @@ and immediately used in input files without any additional changes.
 
         reaction_list = []
         for entry in library.entries.values():
-            if entry.item.matches_species(reactants, products=products):
+            add_reaction = False
+            if reactants is None:
+                add_reaction = True
+            else:
+                if entry.item.matches_species(reactants, products=products):
+                    add_reaction = True
+            if add_reaction:
                 reaction = LibraryReaction(
                     reactants=entry.item.reactants[:],
                     products=entry.item.products[:],
