@@ -60,7 +60,7 @@ def pass_cutting_threshold(species):
     return False
 
 
-def drop_disallowed_species(species_dict, source=''):
+def drop_disallowed_species(species_dict, source='', allowed_species=None):
     """
     Given a label -> `Species` dictionary, delete (in place) every entry that is a
     globally forbidden structure or that fails the user's speciesConstraints, logging
@@ -68,12 +68,27 @@ def drop_disallowed_species(species_dict, source=''):
 
     Used by the recalc-from-yaml path, which reuses a mechanism generated under
     possibly looser constraints and so must drop violating species rather than raise.
+
+    `allowed_species` is an optional list of `Species` (or `Molecule`) the user has
+    explicitly permitted, e.g. via ``allowed=['input species']`` in
+    generatedSpeciesConstraints. Entries isomorphic to one of these are kept even if
+    they are globally forbidden or violate a constraint, mirroring the exemption
+    `RMG.initialize` applies to input species. The caller must pass these in rather
+    than relying on `species_constraints['explicitlyAllowedMolecules']`: the recalc
+    seed is added before the loop in `RMG.initialize` that populates that list, so it
+    is still empty at this point.
     """
     import rmgpy.data.rmg
 
     forbidden_structures = rmgpy.data.rmg.database.forbidden_structures
+    allowed_molecules = [spec.molecule[0] if isinstance(spec, Species) else spec
+                         for spec in (allowed_species or [])]
     dropped = []
     for label, species in list(species_dict.items()):
+        if any(species.is_isomorphic(mol) for mol in allowed_molecules):
+            logging.info(f'Keeping species {label} from {source} despite species constraints: '
+                         'explicitly allowed by the user.')
+            continue
         reason = ('globally forbidden structure'
                   if forbidden_structures.is_molecule_forbidden(species.molecule[0])
                   else fails_species_constraints(species))

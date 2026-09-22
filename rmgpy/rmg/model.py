@@ -1783,8 +1783,18 @@ class CoreEdgeReactionModel:
                 # we will have a yaml file and a species dictionary
                 species_dict = load_species_dictionary(seed_mech)
 
-                # Drop dictionary species that violate the current species constraints
-                drop_disallowed_species(species_dict, source=f'recalc mechanism {seed_mech}')
+                # Drop dictionary species that violate the current species constraints.
+                # Species the user declared in the input file are exempt when they listed
+                # 'input species' in the generatedSpeciesConstraints `allowed` list. We read
+                # rmg.initial_species directly because the loop in RMG.initialize that turns
+                # those into `explicitlyAllowedMolecules` runs *after* this call.
+                # Note: 'seed mechanisms'/'reaction libraries' are deliberately not honored
+                # here — the recalc dictionary is itself the seed, so honoring them would
+                # exempt everything and make this pruning a no-op.
+                allowed_kinds = (rmg.species_constraints or {}).get('allowed') or []
+                allowed_species = list(rmg.initial_species) if 'input species' in allowed_kinds else []
+                drop_disallowed_species(species_dict, source=f'recalc mechanism {seed_mech}',
+                                        allowed_species=allowed_species)
 
                 _max_master_index = 0
                 for _spec in species_dict.values():
