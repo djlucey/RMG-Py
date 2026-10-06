@@ -277,6 +277,8 @@ def to_ob_mol(mol, return_mapping=False, save_order=False):
         for atom2, bond in atom1.edges.items():
             if bond.is_hydrogen_bond():
                 continue
+            if bond.order not in orders:
+                continue
             index1 = atoms.index(atom1)
             index2 = atoms.index(atom2)
             if index1 < index2:
