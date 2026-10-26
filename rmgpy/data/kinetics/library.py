@@ -50,6 +50,7 @@ from rmgpy.reaction import Reaction
 from rmgpy.species import Species
 from rmgpy.data.solvation import to_soluteTSdata
 import rmgpy.constants as constants
+from rmgpy.kinetics import ArrheniusBM
 
 ################################################################################
 
@@ -220,6 +221,13 @@ class LibraryReaction(Reaction):
             
         return False
 
+    def apply_bm_scale(self, newmetal):
+        # get ea 
+        # get e0 from ea 
+        # get ea from delta h diference and change the ea 
+        # add comment that the ea was adjusted by the BM scaling factor
+        return
+
     def apply_solvent_correction(self, solvent):
         """
         apply kinetic solvent correction
@@ -284,7 +292,7 @@ class KineticsLibrary(Database):
     def __repr__(self):
         return '<KineticsLibrary "{0}">'.format(self.label)
 
-    def get_library_reactions(self):
+    def get_library_reactions(self, add_bm=True):
         """
         makes library and template reactions as appropriate from the library comments
         and returns at list of all of these LibraryReaction and TemplateReaction objects
@@ -325,6 +333,14 @@ class KineticsLibrary(Database):
                                       kinetics=entry.data, duplicate=entry.item.duplicate,
                                       reversible=entry.item.reversible, allow_pdep_route=entry.item.allow_pdep_route,
                                       elementary_high_p=entry.item.elementary_high_p)
+
+            if add_bm:
+                try:
+                    bm = ArrheniusBM().fit_to_reactions([rxn], w0=1e9)
+                    rxn.kinetics = bm
+                except Exception as e:
+                    print(f"Could not apply BM scaling to reaction {rxn} in library {self.label}: {e}")
+            
             rxns.append(rxn)
 
         return rxns
